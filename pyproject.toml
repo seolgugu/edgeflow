@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edgeflow"
+version = "0.1.0"
+description = "Kubernetes & Redis 기반 엣지 AI 분산 처리 프레임워크"
+dependencies = [
+    "typer[all]",
+    "redis",
+    "jinja2",
+    "fastapi",
+    "uvicorn",
+]
+
+[project.scripts]
+edgeflow = "edgeflow.cli:app"
+
+[tool.setuptools.package-data]
+edgeflow = ["templates/*.j2"]

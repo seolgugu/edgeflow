@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: edgeflow-config
+  namespace: edgeflow-test
+data:
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  GATEWAY_HOST: "localhost" 
+  GATEWAY_PORT: "8080"
