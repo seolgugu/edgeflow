@@ -9,16 +9,12 @@ app = EdgeApp("test-app")
 @app.producer(fps=10)
 def camera():
     frame = np.random.randint(0, 255, (240, 320, 3), dtype=np.uint8)
-    
-    return frame
+    return frame # Numpy 반환 (자동 직렬화)
 
 @app.consumer(replicas=1)
-def ai(frame):
-    # [핵심 수정] 받은 데이터는 bytes이므로, 다시 이미지(Numpy)로 복원해야 함
-    
+def ai(frame): # Numpy로 들어옴 (자동 역직렬화)
     cv2.putText(frame, "Processed", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-    
-    return frame
+    return frame # Numpy 반환 (자동 직렬화)
 
 @app.gateway(port=8000)
 def view(frame):

@@ -59,42 +59,7 @@ class EdgeApp:
         else:
             logger.error(f"Unknown role: {role}")
 
-    # 1. [신규] 엄격한 직렬화 메서드 (보내는 쪽)
-    def _serialize(self, data):
-        """
-        데이터를 전송 가능한 bytes로 변환합니다.
-        허용 타입: bytes, numpy.ndarray
-        그 외 타입: TypeError 발생
-        """
-        if isinstance(data, bytes):
-            return data  # 바이트는 그대로 통과
-        
-        elif isinstance(data, np.ndarray):
-            # Numpy 배열(이미지)은 고효율 JPEG로 압축
-            success, encoded_img = cv2.imencode('.jpg', data)
-            if not success:
-                raise ValueError("이미지 인코딩 실패")
-            return encoded_img.tobytes()
-        
-        else:
-            # 엄격한 타입 제한: 그 외에는 에러 발생
-            t = type(data).__name__
-            raise TypeError(f"❌ 허용되지 않는 데이터 타입입니다: {t}. (bytes 또는 numpy.ndarray만 가능)")
-
-    # 2. [신규] 역직렬화 메서드 (받는 쪽)
-    def _deserialize(self, data, as_image=True):
-        """
-        받은 bytes를 원본 데이터로 복원합니다.
-        as_image=True이면 Numpy 이미지로 디코딩합니다.
-        """
-        if not as_image:
-            return data  # 이미지 처리가 필요 없으면 바이트 그대로 반환
-        
-        # 바이트 -> Numpy 이미지로 디코딩
-        nparr = np.frombuffer(data, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        return img
-
+    
     # --- Internal Loops ---
     def _run_producer(self, host):
         broker = RedisBroker(host)
@@ -177,48 +142,70 @@ class EdgeApp:
             
             
 
+    # 1. 직렬화 (Producer/Consumer용)
+    def _serialize(self, data):
+        if isinstance(data, bytes): return data
+        if isinstance(data, np.ndarray):
+            _, buf = cv2.imencode('.jpg', data)
+            return buf.tobytes()
+        raise TypeError("지원되지 않는 데이터 타입")
+
+    # 2. 역직렬화 (Consumer용) - Gateway는 사용 안 함!
+    def _deserialize(self, data, as_image=True):
+        """
+        [수정됨] as_image 인자를 받도록 복구하여 Consumer 호출과 호환
+        """
+        if not as_image:
+            return data
+        
+        # 바이트 -> Numpy 이미지로 디코딩
+        nparr = np.frombuffer(data, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        return img
+
     def _run_gateway(self):
         import uvicorn
         from fastapi import FastAPI
         from fastapi.responses import StreamingResponse
         
         app = FastAPI()
+        # [검증된 코드 방식] Queue를 여기서 생성
         q = asyncio.Queue(maxsize=1)
 
-    async def tcp_server(reader, writer):
-        try:
-            while True:
-                len_bytes = await reader.readexactly(4)
-                length = int.from_bytes(len_bytes, 'big')
-                packet = await reader.readexactly(length)
+        async def tcp_server(reader, writer):
+            try:
+                while True:
+                    # 1. 길이 읽기
+                    len_bytes = await reader.readexactly(4)
+                    length = int.from_bytes(len_bytes, 'big')
+                    
+                    # 2. 데이터 읽기 (헤더+이미지Bytes)
+                    data = await reader.readexactly(length)
+                    
+                    # [중요] Gateway는 역직렬화 하지 않음! Bytes 그대로 유지
+                    # 사용자가 view 함수를 정의했다면 호출하되, 데이터는 bytes임
+                    final = self.gateway_func(data) if self.gateway_func else data
+                    
+                    if final:
+                        if q.full():
+                            try: q.get_nowait()
+                            except: pass
+                        await q.put(final) # Bytes 넣기
 
-                if len(packet) < 12:
-                    continue
-
-                header = packet[:12]
-                jpeg = packet[12:]
-
-                if q.full():
-                    q.get_nowait()
-                await q.put((header, jpeg))
-
-        except asyncio.IncompleteReadError:
-            logger.info("Gateway TCP client disconnected")
-        except Exception as e:
-            logger.error(f"Gateway TCP Error: {e}")
-
-
+            except asyncio.IncompleteReadError:
+                pass
+            except Exception as e:
+                logger.error(f"Gateway TCP Error: {e}")
 
         async def mjpeg_gen():
             while True:
-                header, jpeg = await q.get()
-                yield (
-                    b"--frameboundary\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n"
-                    + jpeg +
-                    b"\r\n"
-                )
-
+                packet = await q.get()
+                # [검증된 코드 방식] 헤더(12바이트) 제거 후 이미지 데이터만 전송
+                frame_data = packet[12:]
+                
+                # Bytes + Bytes 결합이므로 에러 없음
+                yield (b'--frameboundary\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n')
 
         @app.get("/video_stream")
         def stream():
@@ -226,6 +213,7 @@ class EdgeApp:
 
         @app.on_event("startup")
         async def startup():
+            # [검증된 코드 방식] create_task로 비동기 실행
             asyncio.create_task(asyncio.start_server(tcp_server, '0.0.0.0', 8080))
 
         logger.info(f"📺 Gateway 시작 (HTTP: {self.gateway_port})")
