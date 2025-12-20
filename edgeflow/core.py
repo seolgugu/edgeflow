@@ -99,9 +99,8 @@ class EdgeApp:
                         time.sleep(1); 
                         continue
 
-                packet_data = self._serialize(raw_data)
-                header = struct.pack('!Id', frame_id, time.time())
-                packet = header + packet_data
+                frame = Frame(frame_id=frame_id, data=raw_data)
+                packet = frame.to_bytes()
 
                 frame_id += 1
                 elapsed = time.time() - start
@@ -164,51 +163,6 @@ class EdgeApp:
                 logger.error(f"Consumer Logic Error: {e}")
 
 
-            
-            
-            
-
-    # 1. 직렬화 (Producer/Consumer용)
-    def _serialize(self, data, meta={}):
-        """
-        data: 이미지 (numpy array) 또는 bytes
-        meta: JSON으로 보낼 딕셔너리 (기본값 {})
-        """
-        # 1. 이미지 인코딩
-        if isinstance(data, np.ndarray):
-            _, buf = cv2.imencode('.jpg', data)
-            img_bytes = buf.tobytes()
-        elif isinstance(data, bytes):
-            img_bytes = data
-        else:
-            raise TypeError("이미지 데이터 타입 오류")
-
-        # 2. 메타데이터(JSON) 인코딩
-        json_str = json.dumps(meta)     # 딕셔너리 -> 문자열
-        json_bytes = json_str.encode('utf-8') # 문자열 -> 바이트
-        json_len = len(json_bytes)      # 길이 측정
-
-        # 3. 패킷 합치기 (순서 중요!)
-        # [JSON길이(4바이트)] + [JSON바이트] + [이미지바이트]
-        # '!I'는 unsigned int (4byte)를 의미함
-        packed_data = struct.pack('!I', json_len) + json_bytes + img_bytes
-        
-        return packed_data
-
-    # 2. 역직렬화 (Consumer용) - Gateway는 사용 안 함!
-    def _deserialize(self, data, as_image=True):
-        """
-        [수정됨] as_image 인자를 받도록 복구하여 Consumer 호출과 호환
-        """
-        if not as_image:
-            return data
-        
-        # 바이트 -> Numpy 이미지로 디코딩
-        nparr = np.frombuffer(data, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        return img
-
-
 
     def _run_gateway(self):
         import uvicorn
@@ -248,14 +202,15 @@ class EdgeApp:
                     # 유저 핸들러 실행
                     processed_data = handler(frame.data, frame.meta)
 
-                    # 4. [휴먼에러 방지] 결과가 넘파이든 바이트든 전송용(bytes)으로 강제 변환
+                    # 결과가 넘파이든 바이트든 전송용(bytes)으로 강제 변환
                     if processed_data is not None:
-                        final_bytes = None
-                        if isinstance(processed_data, np.ndarray):
-                            _, buf = cv2.imencode('.jpg', processed_data)
-                            final_bytes = buf.tobytes()
-                        elif isinstance(processed_data, bytes):
-                            final_bytes = processed_data
+                        output_frame = Frame(
+                            frame_id=frame.frame_id, 
+                            timestamp=frame.timestamp, 
+                            meta=frame.meta, 
+                            data=processed_data
+                        )
+                        final_bytes = output_frame.get_data_bytes()
                         
                         async with lock:
                             state["latest_packet"] = final_bytes # MJPEG용은 항상 bytes

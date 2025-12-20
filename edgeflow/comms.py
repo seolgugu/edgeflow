@@ -103,6 +103,13 @@ class Frame:
 
         meta_bytes = json.dumps(self.meta).encode('utf-8')
         header = struct.pack('!Id', self.frame_id, self.timestamp)
-        meta_header = struct.pack('!I', len(json_bytes))
+        meta_header = struct.pack('!I', len(meta_bytes))
         
         return header + meta_header + meta_bytes + data_bytes
+
+    def get_data_bytes(self):
+        """헤더 없이 순수 데이터(이미지)만 바이트로 변환해서 반환"""
+        if isinstance(self.data, np.ndarray):
+            _, buf = cv2.imencode('.jpg', self.data)
+            return buf.tobytes()
+        return self.data if isinstance(self.data, bytes) else b""
