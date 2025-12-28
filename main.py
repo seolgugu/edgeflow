@@ -1,7 +1,7 @@
 from edgeflow import EdgeApp
 from edgeflow.nodes.producer import ProducerNode
 from edgeflow.nodes.consumer import ConsumerNode
-from edgeflow.nodes.gateway import GatewayNode  # [추가됨]
+from edgeflow.nodes.gateway import GatewayNode, WebInterface
 import numpy as np
 import cv2
 import time
@@ -22,18 +22,21 @@ class MyAI(ConsumerNode):
         cv2.putText(frame, "Class Mode!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         return frame, {"detected": True, "ts": time.time()}
 
-# 3. Gateway (Class 방식) [추가됨]
-@app.node(name="gateway", type="gateway", port=8000)
-class MyGateway(GatewayNode):
-    def setup(self):
-        super().setup() # 필수: FastAPI 라우트 등록 등을 위해 부모 setup 호출
-        print("✅ Custom Gateway Setup Complete")
-
-    def on_message(self, frame, meta):
-        # 메타데이터 확인용 로그
-        if meta.get("detected"):
-            print(f"Alert: {meta}")
-        return frame
+@app.node(name="gateway", type="gateway")
+class MyHub(GatewayNode):
+    def configure(self):
+        # 1. 웹 인터페이스 생성
+        web = WebInterface(port=8000)
+        
+        @web.route("/api/detected")
+        async def check_detected():
+            # web.latest_meta 에 접근 가능 (단, 동시성 주의 필요하지만 읽기만 하면 OK)
+            is_detected = web.latest_meta.get("detected", False)
+            return {"alert": is_detected}
+            
+        # 2. 장착
+        self.add_interface(web)
+        print("✅ Hub & Spoke Gateway Ready!")
 
 if __name__ == "__main__":
     app.run()
