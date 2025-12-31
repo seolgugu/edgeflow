@@ -4,7 +4,7 @@ from ..comms import Frame
 
 class SyncNode(BaseNode):
     def __init__(self, broker, slop=0.1):
-        super().__init__()
+        super().__init__(broker)
         self.input_topics = []
         self.output_topic = None
         self.slop = slop
