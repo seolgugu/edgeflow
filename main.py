@@ -44,7 +44,7 @@ class MyHub(GatewayNode):
         # 1. 웹 인터페이스 생성
         web = WebInterface(port=8000, buffer_delay=0.0)
         
-        @web.route("/api/ai/status/{topic_name}")
+        @web.route("/api/status/{topic_name}")
         async def check_ai_status(topic_name: str):
             meta_data = web.latest_meta.get(topic_name, {})
             is_detected = meta_data.get("detected", False)
