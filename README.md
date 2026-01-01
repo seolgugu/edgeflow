@@ -97,7 +97,7 @@ class Camera(ProducerNode):
         return frame
 
 # 2. [Producer] 라이다 데이터 (10 FPS)
-@app.node(name="lidar", type="producer", fps=1, topic="lidar_data")
+@app.node(name="lidar", type="producer", fps=10, topic="lidar_data")
 class Lidar(ProducerNode):
     def produce(self):
         # 검은 배경 생성
