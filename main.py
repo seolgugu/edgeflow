@@ -21,7 +21,21 @@ class MyCamera(ProducerNode):
 @app.node(name="ai", type="consumer",input_topic="camera_raw", output_topic="ai_result", replicas=1)
 class MyAI(ConsumerNode):
     def process(self, frame):
-        cv2.putText(frame, "Class Mode!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(frame, "Topic 1", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        return frame, {"detected": True, "ts": time.time()}
+
+# 1. Camera Producer
+@app.node(name="camera2", type="producer", fps=10, topic="camera_raw2")
+class MyCamera2(ProducerNode):
+    def produce(self):
+        frame = np.random.randint(0, 255, (240, 320, 3), dtype=np.uint8)
+        return frame
+
+# 2. AI Consumer
+@app.node(name="ai2", type="consumer",input_topic="camera_raw2", output_topic="ai_result2", replicas=1)
+class MyAI2(ConsumerNode):
+    def process(self, frame):
+        cv2.putText(frame, "Topic 2", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         return frame, {"detected": True, "ts": time.time()}
 
 @app.node(name="gateway", type="gateway")
@@ -30,13 +44,27 @@ class MyHub(GatewayNode):
         # 1. 웹 인터페이스 생성
         web = WebInterface(port=8000, buffer_delay=0.0)
         
-        @web.route("/api/detected")
-        async def check_detected():
-            # web.latest_meta 에 접근 가능 (단, 동시성 주의 필요하지만 읽기만 하면 OK)
-            is_detected = web.latest_meta.get("detected", False)
-            return {"alert": is_detected}
+        @web.route("/api/ai/status")
+        async def check_ai1_status():
+            meta_data = web.latest_meta.get("ai_result", {})
             
-        # 2. 장착
+            is_detected = meta_data.get("detected", False)
+            
+            return {
+                "meta": meta_data, 
+                "alert": is_detected
+            }
+        
+        @web.route("/api/ai2/status2")
+        async def check_ai2_status(): 
+            meta_data = web.latest_meta.get("ai_result2", {})
+            
+            is_detected = meta_data.get("detected", False)
+            
+            return {
+                "meta": meta_data, 
+                "alert": is_detected
+            }
         self.add_interface(web)
         print("✅ Hub & Spoke Gateway Ready!")
 
