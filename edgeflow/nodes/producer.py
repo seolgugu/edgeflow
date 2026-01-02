@@ -8,14 +8,13 @@ class ProducerNode(BaseNode):
         super().__init__(broker)
         self.fps = fps
         self.queue_size = queue_size
-        self.output_topic = topic
 
     def produce(self):
         """사용자가 구현해야 할 메소드"""
         raise NotImplementedError
 
     def run(self):
-        print(f"🚀 Producer started (FPS: {self.fps}), Output Topic: {self.output_topic}")
+        print(f"🚀 Producer started (FPS: {self.fps})")
         frame_id = 0
         while self.running:
             start = time.time()
@@ -32,12 +31,10 @@ class ProducerNode(BaseNode):
             else:
                 frame = Frame(frame_id=frame_id, timestamp=time.time(), data=raw_data)
             
-            # Redis 전송 (기존 로직)
-            self.broker.push(self.output_topic, frame.to_bytes())
-            self.broker.trim(self.output_topic, self.queue_size)
+            self.send_result(frame)
             
             frame_id += 1
             
-            # FPS 제어
+            # FPS 제어 (테스트용 fps 제한 기능)
             elapsed = time.time() - start
             time.sleep(max(0, (1.0/self.fps) - elapsed))

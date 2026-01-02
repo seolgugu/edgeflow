@@ -77,13 +77,11 @@ class FusionNode(BaseNode):
             # 2. 프로세스 실행
             result = self.process(matched_frames)
 
-            # 3. 결과 전송 [이 부분이 핵심 수정됨!]
-            if result is not None and self.output_topic:
+            # 3. 결과 전송
+            if result is not None:
                 if isinstance(result, Frame):
                     out_frame = result
                 else:
-                    # [수정 전] out_frame = Frame(result) <--- 이게 범인!
-                    # [수정 후] ID와 Timestamp는 물려받고, 데이터만 result로 채움
                     out_frame = Frame(
                         frame_id=base_frame.frame_id, 
                         timestamp=base_frame.timestamp, 
@@ -91,10 +89,7 @@ class FusionNode(BaseNode):
                         data=result
                     )
                 
-                if 'topic' not in out_frame.meta:
-                    out_frame.meta['topic'] = self.output_topic
-                
-                self.broker.push(self.output_topic, out_frame.to_bytes())
+                self.send_result(out_frame)
         else:
             should_drop = False
             

@@ -9,12 +9,19 @@ class BaseNode(ABC):
         host = os.getenv("REDIS_HOST", "localhost")
         self.broker = broker  # 기존 comms.py의 RedisBroker 그대로 사용
 
-        self.input_topic = None
-        self.output_topic = None
-        self.input_topics = []
-        
+        # [변경] 입출력 프로토콜 및 핸들러 관리
+        self.input_protocol = "redis"  # 기본값
+        self.input_topics = []         # 수신할 토픽들
+        self.output_handlers = []      # 데이터를 보낼 배달부 목록
+
         if not self.broker:
             self.broker = RedisBroker(host)
+
+    def send_result(self, frame):
+        """[핵심] 연결된 모든 핸들러에게 데이터 전송"""
+        if not frame: return
+        for handler in self.output_handlers:
+            handler.send(frame)
 
 
     def execute(self):
