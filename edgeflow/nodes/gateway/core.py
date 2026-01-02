@@ -13,6 +13,7 @@ class GatewayNode(BaseNode):
         self.interfaces = [] # 등록된 인터페이스 목록
         self.server = None
         self.active_clients = set()
+        self.input_protocol = "tcp"
 
     def add_interface(self, interface):
         """플러그인 장착"""
