@@ -6,7 +6,7 @@ def build_and_push(image_tag):
     dockerfile = """
 FROM python:3.9-slim
 WORKDIR /app
-RUN apt-get update && apt-get install -y libgl1-mesa-glx
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 # 프레임워크 자체도 설치 (개발 중엔 COPY로 대체 가능)
