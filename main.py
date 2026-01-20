@@ -68,7 +68,7 @@ class GpuProcessor(ConsumerNode):
 # ============================================================
 # 3. 웹 게이트웨이 (실시간 영상 스트리밍)
 # ============================================================
-@app.node(name="gateway", type="gateway")
+@app.node(name="gateway", type="gateway", node_port=30080)
 class VideoGateway(GatewayNode):
     def configure(self):
         web = WebInterface(port=settings.GATEWAY_HTTP_PORT, buffer_delay=0.0)
