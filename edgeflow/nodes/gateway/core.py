@@ -7,8 +7,8 @@ from ...comms import Frame
 from ...config import settings
 
 class GatewayNode(BaseNode):
-    def __init__(self, broker=None):
-        super().__init__(broker)
+    def __init__(self, broker=None, **kwargs):
+        super().__init__(broker, **kwargs)
         self.tcp_port = settings.GATEWAY_TCP_PORT
         self.interfaces = [] # 등록된 인터페이스 목록
         self.server = None

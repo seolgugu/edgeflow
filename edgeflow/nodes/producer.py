@@ -4,8 +4,8 @@ from .base import BaseNode
 from ..comms import Frame  # 기존 Frame 재사용
 
 class ProducerNode(BaseNode):
-    def __init__(self, broker, fps=30, topic="default", queue_size=1):
-        super().__init__(broker)
+    def __init__(self, broker, fps=30, topic="default", queue_size=1, **kwargs):
+        super().__init__(broker, **kwargs)
         self.fps = fps
         self.queue_size = queue_size
 
