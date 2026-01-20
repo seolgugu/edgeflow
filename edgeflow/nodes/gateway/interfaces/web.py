@@ -23,7 +23,9 @@ class WebInterface(BaseInterface):
 
     def setup(self):
         # 라우트 등록
-        self.app.get("/api/status")(self.get_status)
+        self.app.add_api_route("/health", self.health_check, methods=["GET"])
+        self.app.add_api_route("/api/status", self.get_status, methods=["GET"])
+        # self.app.get("/api/status")(self.get_status) 대체
         @self.app.get("/video")
         async def video_feed_default():
             return StreamingResponse(self.stream_generator("default"), media_type="multipart/x-mixed-replace; boundary=frameboundary")
@@ -88,6 +90,9 @@ class WebInterface(BaseInterface):
     async def get_status(self):
         async with self.lock:
             return JSONResponse(content=self.latest_meta)
+
+    async def health_check(self):
+        return JSONResponse(content={"status": "ok"})
 
     async def run_loop(self):
         # 웹 서버 실행 (Gateway 메인 루프와 함께 돔)
