@@ -57,6 +57,7 @@ class EdgeApp:
             # 1. 인스턴스를 미리 생성 (Linker를 위해 필수)
             instance = cls(broker=self.broker, **kwargs)
             instance.name = name
+            instance.type = type # <-- 누락된 type 추가
             instance.device = device
             instance.replicas = replicas
             # 2. 딕셔너리에 저장
