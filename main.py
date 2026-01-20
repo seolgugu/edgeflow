@@ -89,8 +89,9 @@ if __name__ == "__main__":
     app.link("fake_camera").to("gateway")
     
     print(f"\n✅ System Ready! Open your browser:")
-    print(f" - Raw Camera : http://<NODE-IP>:<NodePort>/video/fake_camera")
-    print(f" - AI Result  : http://<NODE-IP>:<NodePort>/video/gpu_processor")
+    print(f" - Health Check: http://<NODE-IP>:30080/health")
+    print(f" - Raw Camera : http://<NODE-IP>:30080/video/fake_camera")
+    print(f" - AI Result  : http://<NODE-IP>:30080/video/gpu_processor")
     print("\n🚀 Starting EdgeFlow...")
     
     app.run()

@@ -134,7 +134,7 @@ def deploy_to_k8s(app, image_tag, namespace="default"):
         # ---------------------------------------------------------
         if getattr(node, 'type', None) == 'gateway' and has_svc_tpl:
             # nodePort만 사용자 설정 가능, 내부 port는 프레임워크 고정
-            gateway_node_port = getattr(node, 'node_port', None)  # None이면 K8s 자동 할당
+            gateway_node_port = getattr(node, 'node_port', 30000)  # None이면 K8s 자동 할당
             
             svc_yaml = svc_template.render(
                 name=name,

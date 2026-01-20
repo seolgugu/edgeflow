@@ -4,8 +4,9 @@ import os
 from ..comms import RedisBroker
 
 class BaseNode(ABC):
-    def __init__(self, broker=None):
+    def __init__(self, broker=None, **kwargs):
         self.running = True
+        self.__dict__.update(kwargs) # 메타데이터(node_port 등) 저장
         host = os.getenv("REDIS_HOST", "localhost")
         self.broker = broker  # 기존 comms.py의 RedisBroker 그대로 사용
 
