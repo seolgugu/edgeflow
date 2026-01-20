@@ -5,7 +5,7 @@ import os
 
 from edgeflow import EdgeApp
 from edgeflow.nodes import ProducerNode, ConsumerNode
-from edgeflow.broker import RedisBroker
+from edgeflow.comms import RedisBroker
 
 # 앱 초기화
 app = EdgeApp("test-distributed-system", broker=RedisBroker(host='localhost', port=6379))
