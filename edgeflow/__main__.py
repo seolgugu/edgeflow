@@ -12,6 +12,7 @@ def main():
     deploy = subparsers.add_parser("deploy")
     deploy.add_argument("file", help="Path to main.py")
     deploy.add_argument("--registry", default="localhost:5000", help="Docker Registry")
+    deploy.add_argument("--namespace", default="edgeflow", help="K8s Namespace (default: edgeflow)")
 
     args = parser.parse_args()
 
@@ -26,8 +27,8 @@ def main():
         print(f"🐳 Building & Pushing Image ({image_tag})...")
         build_and_push(image_tag)
         
-        print(f"🚀 Deploying to Kubernetes...")
-        deploy_to_k8s(app, image_tag)
+        print(f"🚀 Deploying to Kubernetes (Namespace: {args.namespace})...")
+        deploy_to_k8s(app, image_tag, namespace=args.namespace)
         print("✅ Done!")
 
 if __name__ == "__main__":

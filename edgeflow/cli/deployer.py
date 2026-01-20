@@ -5,11 +5,29 @@ from jinja2 import Template
 from kubernetes import client, config
 from edgeflow.constants import REDIS_HOST, REDIS_PORT # 상수 임포트 필수
 
-def ensure_infrastructure(k8s_apps, k8s_core):
+def ensure_namespace(k8s_core, namespace):
+    """네임스페이스 존재 확인 및 생성"""
+    if namespace == "default": return
+
+    try:
+        k8s_core.read_namespace(name=namespace)
+    except client.exceptions.ApiException as e:
+        if e.status == 404:
+            print(f"📦 Creating Namespace: {namespace}")
+            ns_manifest = {
+                "apiVersion": "v1",
+                "kind": "Namespace",
+                "metadata": {"name": namespace}
+            }
+            k8s_core.create_namespace(body=ns_manifest)
+        else:
+            raise e
+
+def ensure_infrastructure(k8s_apps, k8s_core, namespace="default"):
     """
     Redis 인프라(Deployment + Service)가 없으면 띄우는 함수 (멱등성 보장)
     """
-    print("🔍 Checking System Infrastructure...")
+    print(f"🔍 Checking System Infrastructure (ns: {namespace})...")
     
     # Redis 템플릿 로드
     tpl_path = os.path.join(os.path.dirname(__file__), 'templates', 'redis.yaml.j2')
@@ -23,23 +41,22 @@ def ensure_infrastructure(k8s_apps, k8s_core):
         
         try:
             if kind == 'Service':
-                k8s_core.read_namespaced_service(name=name, namespace="default")
+                k8s_core.read_namespaced_service(name=name, namespace=namespace)
             elif kind == 'Deployment':
-                k8s_apps.read_namespaced_deployment(name=name, namespace="default")
-            # print(f"  ✅ {kind}/{name} is running.")
+                k8s_apps.read_namespaced_deployment(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.status == 404:
                 print(f"  ⚠️ {kind}/{name} missing. Creating...")
                 if kind == 'Service':
-                    k8s_core.create_namespaced_service(namespace="default", body=manifest)
+                    k8s_core.create_namespaced_service(namespace=namespace, body=manifest)
                 elif kind == 'Deployment':
-                    k8s_apps.create_namespaced_deployment(namespace="default", body=manifest)
+                    k8s_apps.create_namespaced_deployment(namespace=namespace, body=manifest)
             else:
                 raise e
     
     print("  🚀 Infrastructure Check Complete.")
 
-def deploy_to_k8s(app, image_tag):
+def deploy_to_k8s(app, image_tag, namespace="default"):
     # 템플릿 로드 (Deployment용)
     dep_tpl_path = os.path.join(os.path.dirname(__file__), 'templates', 'deployment.yaml.j2')
     with open(dep_tpl_path) as f:
@@ -66,10 +83,13 @@ def deploy_to_k8s(app, image_tag):
     k8s_apps = client.AppsV1Api()
     k8s_core = client.CoreV1Api()
 
-    # 1. 인프라 체크
-    ensure_infrastructure(k8s_apps, k8s_core)
+    # 0. 네임스페이스 준비
+    ensure_namespace(k8s_core, namespace)
 
-    print(f"🚀 Deploying {len(app.nodes)} nodes...")
+    # 1. 인프라 체크
+    ensure_infrastructure(k8s_apps, k8s_core, namespace)
+
+    print(f"🚀 Deploying {len(app.nodes)} nodes to namespace '{namespace}'...")
 
     # 2. 노드별 배포
     for name, node in app.nodes.items():
@@ -83,7 +103,7 @@ def deploy_to_k8s(app, image_tag):
             replicas=getattr(node, 'replicas', 1),
             # 프레임워크 내부 통신용 환경변수 주입
             env_vars={
-                "REDIS_HOST": REDIS_HOST,
+                "REDIS_HOST": f"{REDIS_HOST}.{namespace}.svc.cluster.local", # 네임스페이스 포함 DNS
                 "REDIS_PORT": str(REDIS_PORT),
                 "NODE_NAME": name
             }
@@ -96,11 +116,11 @@ def deploy_to_k8s(app, image_tag):
         manifest['spec']['template']['metadata']['annotations']['kubectl.kubernetes.io/restartedAt'] = datetime.datetime.now().isoformat()
 
         try:
-            k8s_apps.create_namespaced_deployment(namespace="default", body=manifest)
+            k8s_apps.create_namespaced_deployment(namespace=namespace, body=manifest)
             print(f"  + [App] Created: {name}")
         except client.exceptions.ApiException as e:
             if e.status == 409: # Already Exists -> Update
-                k8s_apps.patch_namespaced_deployment(name=manifest['metadata']['name'], namespace="default", body=manifest)
+                k8s_apps.patch_namespaced_deployment(name=manifest['metadata']['name'], namespace=namespace, body=manifest)
                 print(f"  * [App] Updated: {name} (Rolling Update)")
             else:
                 raise e
@@ -120,7 +140,7 @@ def deploy_to_k8s(app, image_tag):
             svc_manifest = yaml.safe_load(svc_yaml)
             
             try:
-                k8s_core.create_namespaced_service(namespace="default", body=svc_manifest)
+                k8s_core.create_namespaced_service(namespace=namespace, body=svc_manifest)
                 port_msg = f":{gateway_node_port}" if gateway_node_port else " (auto-assigned)"
                 print(f"  + [Svc] Exposed Gateway: http://<NODE-IP>{port_msg}")
             except client.exceptions.ApiException as e:
