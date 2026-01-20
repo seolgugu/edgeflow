@@ -36,15 +36,11 @@ spec:
             privileged: true
           {% endif %}
 
-          {# 리소스 요청 (GPU) #}
-          {% if device == 'gpu' %}
-          resources:
-            limits:
-              nvidia.com/gpu: 1
-          {% endif %}
 
-      {# 노드 셀렉터: 사용자가 지정한 device 라벨이 있는 노드로 감 #}
-      {% if device %}
+      {# 노드 셀렉터: Gateway는 infra 노드, 나머지는 device 라벨 노드 #}
       nodeSelector:
+      {% if is_gateway %}
+        edgeflow.io/role: infra
+      {% elif device %}
         edgeflow.io/device: {{ device }}
       {% endif %}

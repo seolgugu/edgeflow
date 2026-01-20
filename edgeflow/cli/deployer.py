@@ -96,11 +96,15 @@ def deploy_to_k8s(app, image_tag, namespace="default"):
         # ---------------------------------------------------------
         # A. Deployment 생성 (공통)
         # ---------------------------------------------------------
+        # Gateway 타입 여부 확인
+        is_gateway = (getattr(node, 'type', None) == 'gateway')
+
         yaml_str = dep_template.render(
             name=name,
             image=image_tag,
             device=getattr(node, 'device', None),
             replicas=getattr(node, 'replicas', 1),
+            is_gateway=is_gateway, # 템플릿에 전달하여 role:infra 할당 유도
             # 프레임워크 내부 통신용 환경변수 주입
             env_vars={
                 "REDIS_HOST": f"{REDIS_HOST}.{namespace}.svc.cluster.local", # 네임스페이스 포함 DNS
