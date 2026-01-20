@@ -8,9 +8,13 @@ class RedisBroker(BrokerInterface):
     def __init__(self, host='localhost', port=6379):
         self.host = host or os.getenv('REDIS_HOST', 'localhost')
         self.port = port or int(os.getenv('REDIS_PORT', 6379))
+        self._redis = None  # Lazy: 아직 연결 안 함
 
-        self.redis = self._connect()
-
+    def _ensure_connected(self):
+        """첫 호출 시에만 연결, 이후엔 재사용"""
+        if self._redis is None:
+            self._redis = self._connect()
+    
     def _connect(self):
         """Redis 연결 재시도 로직"""
         while True:
@@ -26,23 +30,26 @@ class RedisBroker(BrokerInterface):
     def push(self, topic: str, data: bytes):
         """데이터 큐에 넣기 (Producer)"""
         if not data: return
+        self._ensure_connected()
         try:
-            self.redis.rpush(topic, data)
+            self._redis.rpush(topic, data)
         except Exception as e:
             print(f"Redis Push Error: {e}")
 
     def trim(self, topic: str, size: int =1):
         """오래된 데이터 삭제 (메모리 관리)"""
+        self._ensure_connected()
         try:
-            self.redis.ltrim(topic, -size, -1)
+            self._redis.ltrim(topic, -size, -1)
         except Exception:
             pass
 
     def pop(self, topic: str, timeout: int=0):
         """데이터 가져오기 (Consumer) - Blocking"""
+        self._ensure_connected()
         try:
             # blpop은 (key, value) 튜플을 반환하므로 value([1])만 리턴
-            res = self.redis.blpop(topic, timeout=timeout)
+            res = self._redis.blpop(topic, timeout=timeout)
             return res[1] if res else None
         except Exception as e:
             print(f"Redis Pop Error: {e}")

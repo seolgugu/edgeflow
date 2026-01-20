@@ -8,7 +8,7 @@ from edgeflow.nodes import ProducerNode, ConsumerNode
 from edgeflow.comms import RedisBroker
 
 # 앱 초기화
-app = EdgeApp("test-distributed-system", broker=RedisBroker(host='localhost', port=6379))
+app = EdgeApp("test-distributed-system", broker=RedisBroker())
 
 # ============================================================
 # 1. 가짜 카메라 노드 (Producer)
