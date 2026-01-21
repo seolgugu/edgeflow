@@ -4,7 +4,7 @@ import yaml
 import datetime
 from jinja2 import Template
 from kubernetes import client, config
-from edgeflow.constants import REDIS_HOST, REDIS_PORT # 상수 임포트 필수
+from edgeflow.constants import REDIS_HOST, REDIS_PORT, GATEWAY_TCP_PORT, GATEWAY_HTTP_PORT, DATA_REDIS_HOST, DATA_REDIS_PORT # 상수 임포트 필수
 
 def ensure_namespace(k8s_core, namespace):
     """네임스페이스 존재 확인 및 생성"""
@@ -24,22 +24,17 @@ def ensure_namespace(k8s_core, namespace):
         else:
             raise e
 
-def ensure_infrastructure(k8s_apps, k8s_core, namespace="default"):
-    """
-    Redis 인프라(Deployment + Service)가 없으면 띄우는 함수 (멱등성 보장)
-    """
-    print(f"🔍 Checking System Infrastructure (ns: {namespace})...")
-    
-    # Redis 템플릿 로드
-    tpl_path = os.path.join(os.path.dirname(__file__), 'templates', 'redis.yaml.j2')
+from edgeflow.comms.brokers.dual_redis import DualRedisBroker # 타입 체크용
+
+def ensure_infra_resource(k8s_apps, k8s_core, namespace, template_name):
+    """지정된 인프라 템플릿(Redis 등) 배포 헬퍼"""
+    tpl_path = os.path.join(os.path.dirname(__file__), 'templates', template_name)
     with open(tpl_path) as f:
         manifests = list(yaml.safe_load_all(f.read()))
 
-    # Deployment와 Service를 각각 체크하고 없으면 생성
     for manifest in manifests:
         kind = manifest['kind']
         name = manifest['metadata']['name']
-        
         try:
             if kind == 'Service':
                 k8s_core.read_namespaced_service(name=name, namespace=namespace)
@@ -47,15 +42,29 @@ def ensure_infrastructure(k8s_apps, k8s_core, namespace="default"):
                 k8s_apps.read_namespaced_deployment(name=name, namespace=namespace)
         except client.exceptions.ApiException as e:
             if e.status == 404:
-                print(f"  ⚠️ {kind}/{name} missing. Creating...")
+                print(f"  ⚠️ [Infra] {kind}/{name} missing. Creating...")
                 if kind == 'Service':
                     k8s_core.create_namespaced_service(namespace=namespace, body=manifest)
                 elif kind == 'Deployment':
                     k8s_apps.create_namespaced_deployment(namespace=namespace, body=manifest)
             else:
                 raise e
+
+def ensure_infrastructure(k8s_apps, k8s_core, app_broker, namespace="default"):
+    """
+    브로커 타입에 따라 필요한 Redis 인프라를 동적으로 배포
+    """
+    print(f"🔍 Checking Infrastructure for {app_broker.__class__.__name__}...")
     
-    print("  🚀 Infrastructure Check Complete.")
+    # 1. 기본 Redis (Control Plane) - 항상 배포
+    ensure_infra_resource(k8s_apps, k8s_core, namespace, 'redis.yaml.j2')
+
+    # 2. Dual Mode인 경우 -> Data Redis 추가 배포
+    if isinstance(app_broker, DualRedisBroker):
+        print(f"  🚀 Dual Mode Detected! Deploying Data Redis...")
+        ensure_infra_resource(k8s_apps, k8s_core, namespace, 'redis-data.yaml.j2')
+    
+    print("  ✅ Infrastructure Ready.")
 
 def deploy_to_k8s(app, image_tag, namespace="default"):
     # 템플릿 로드 (Deployment용)
@@ -87,8 +96,8 @@ def deploy_to_k8s(app, image_tag, namespace="default"):
     # 0. 네임스페이스 준비
     ensure_namespace(k8s_core, namespace)
 
-    # 1. 인프라 체크
-    ensure_infrastructure(k8s_apps, k8s_core, namespace)
+    # 1. 인프라 체크 (Smart Detection)
+    ensure_infrastructure(k8s_apps, k8s_core, app.broker, namespace)
 
     print(f"🚀 Deploying {len(app.nodes)} nodes to namespace '{namespace}'...")
 
@@ -110,8 +119,10 @@ def deploy_to_k8s(app, image_tag, namespace="default"):
             env_vars={
                 "REDIS_HOST": f"{REDIS_HOST}.{namespace}.svc.cluster.local", # 네임스페이스 포함 DNS
                 "REDIS_PORT": str(REDIS_PORT),
+                "DATA_REDIS_HOST": f"{DATA_REDIS_HOST}.{namespace}.svc.cluster.local", # [신규] Data Redis
+                "DATA_REDIS_PORT": str(DATA_REDIS_PORT),
                 "GATEWAY_HOST": f"gateway-svc.{namespace}.svc.cluster.local", # [신규] Gateway 주소 주입
-                "GATEWAY_TCP_PORT": "8080", # [원복] TCP 포트 8080 고정
+                "GATEWAY_TCP_PORT": str(GATEWAY_TCP_PORT), # [상수] TCP 포트
                 "NODE_NAME": name
             }
         )
@@ -141,8 +152,8 @@ def deploy_to_k8s(app, image_tag, namespace="default"):
             
             svc_yaml = svc_template.render(
                 name=name,
-                port=8000,  # 프레임워크 웹 인터페이스 (HTTP)
-                tcp_port=8080, # [신규] 내부 통신용 TCP 포트 추가
+                port=GATEWAY_HTTP_PORT,  # [상수] 웹 인터페이스
+                tcp_port=GATEWAY_TCP_PORT, # [상수] 내부 통신용 TCP
                 node_port=gateway_node_port
             )
             svc_manifest = yaml.safe_load(svc_yaml)
