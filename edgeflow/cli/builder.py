@@ -13,20 +13,25 @@ RUN pip install -r requirements.txt
 COPY . /app
 RUN pip install .
 """
-    with open("Dockerfile.temp", "w") as f:
+    import tempfile
+    
+    # 안전한 임시 파일 사용
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, prefix='Dockerfile.edgeflow.') as f:
         f.write(dockerfile)
+        temp_dockerfile_path = f.name
 
     try:
         # Build & Push
         subprocess.run([
         "docker", "buildx", "build",
-        "--platform", "linux/amd64,linux/arm64", # ⭐ 핵심: 두 아키텍처 모두 지원
-        "-f", "Dockerfile.temp",
+        "--platform", "linux/amd64,linux/arm64", 
+        "-f", temp_dockerfile_path,  # 임시 파일 경로 사용
         "-t", image_tag,
-        "--push", # 빌드 후 바로 푸시
+        "--push", 
         "."
     ], check=True)
     
     finally:
-        if os.path.exists("Dockerfile.temp"):
-            os.remove("Dockerfile.temp")
+        # 빌드 후 임시 파일 정리
+        if os.path.exists(temp_dockerfile_path):
+            os.remove(temp_dockerfile_path)

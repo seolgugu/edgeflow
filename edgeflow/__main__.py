@@ -28,7 +28,7 @@ def main():
         build_and_push(image_tag)
         
         print(f"🚀 Deploying to Kubernetes (Namespace: {args.namespace})...")
-        deploy_to_k8s(app, image_tag, namespace=args.namespace)
+        deploy_to_k8s(app, image_tag, file_path=args.file, namespace=args.namespace)
         print("✅ Done!")
 
 if __name__ == "__main__":

@@ -66,7 +66,7 @@ def ensure_infrastructure(k8s_apps, k8s_core, app_broker, namespace="default"):
     
     print("  ✅ Infrastructure Ready.")
 
-def deploy_to_k8s(app, image_tag, namespace="default"):
+def deploy_to_k8s(app, image_tag, file_path="main.py", namespace="default"):
     # 템플릿 로드 (Deployment용)
     dep_tpl_path = os.path.join(os.path.dirname(__file__), 'templates', 'deployment.yaml.j2')
     with open(dep_tpl_path) as f:
@@ -101,6 +101,9 @@ def deploy_to_k8s(app, image_tag, namespace="default"):
 
     print(f"🚀 Deploying {len(app.nodes)} nodes to namespace '{namespace}'...")
 
+    # 실행 파일명 추출 (예: c:/.../main.py -> main.py)
+    main_file_name = os.path.basename(file_path)
+
     # 2. 노드별 배포
     for name, node in app.nodes.items():
         # ---------------------------------------------------------
@@ -111,6 +114,7 @@ def deploy_to_k8s(app, image_tag, namespace="default"):
 
         yaml_str = dep_template.render(
             name=name,
+            main_file=main_file_name,  # [신규] 동적 실행 파일명 전달
             image=image_tag,
             device=getattr(node, 'device', None),
             replicas=getattr(node, 'replicas', 1),

@@ -1,1 +1,2 @@
 recursive-include edgeflow/cli/templates *.j2
+recursive-include edgeflow/nodes/gateway/interfaces/templates *.html

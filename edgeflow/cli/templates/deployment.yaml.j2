@@ -17,7 +17,7 @@ spec:
       containers:
         - name: main
           image: {{ image }}
-          command: ["python", "main.py", "--node", "{{ name }}"]
+          command: ["python", "{{ main_file }}", "--node", "{{ name }}"]
           imagePullPolicy: Always
           env:
             - name: PYTHONUNBUFFERED

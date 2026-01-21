@@ -12,7 +12,9 @@ setup(
         "jinja2",
         "docker",
         "numpy",
-        "opencv-python"
+        "opencv-python",
+        "fastapi",
+        "uvicorn"
     ],
     entry_points={
         "console_scripts": [
