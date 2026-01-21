@@ -46,7 +46,7 @@ class FakeCamera(ProducerNode):
 # 2. 가짜 GPU 처리 노드 (Consumer)
 # 목표 배포지: k3s-worker-2,3,4 중 하나 (device="gpu" 라벨이 있는 곳)
 # ============================================================
-@app.node(name="gpu_processor", type="consumer", device="gpu", replicas=1)
+@app.node(name="gpu_processor", type="consumer", device="gpu", replicas=2)
 class GpuProcessor(ConsumerNode):
     def configure(self):
         self.hostname = os.getenv("HOSTNAME", "unknown-host")
