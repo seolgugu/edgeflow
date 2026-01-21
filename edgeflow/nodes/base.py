@@ -4,8 +4,10 @@ import os
 from ..comms import RedisBroker
 
 class BaseNode(ABC):
-    def __init__(self, broker=None):
+    def __init__(self, broker=None, **kwargs):
         self.running = True
+        self.__dict__.update(kwargs) # 메타데이터(node_port 등) 저장
+        self.hostname = os.getenv("HOSTNAME", "localhost") # [신규] 노드 호스트명 식별자
         host = os.getenv("REDIS_HOST", "localhost")
         self.broker = broker  # 기존 comms.py의 RedisBroker 그대로 사용
 
@@ -35,6 +37,11 @@ class BaseNode(ABC):
             self.teardown()
 
     def setup(self):
+        """초기화 로직 (User Hook 포함)"""
+        self.configure()
+
+    def configure(self):
+        """[User Hook] 사용자가 오버라이드하여 초기화 로직 구현"""
         pass
 
     @abstractmethod

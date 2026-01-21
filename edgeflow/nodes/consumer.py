@@ -4,8 +4,8 @@ from .base import BaseNode
 from ..comms import Frame
 
 class ConsumerNode(BaseNode):
-    def __init__(self, broker, replicas=1):
-        super().__init__(broker=broker)
+    def __init__(self, broker, replicas=1, **kwargs):
+        super().__init__(broker=broker, **kwargs)
         self.replicas = replicas
         
 

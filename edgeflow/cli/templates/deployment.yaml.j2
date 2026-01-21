@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ name | replace('_', '-') }}
+  labels:
+    app: {{ name }}
+spec:
+  replicas: {{ replicas }}
+  selector:
+    matchLabels:
+      app: {{ name }}
+  template:
+    metadata:
+      labels:
+        app: {{ name }}
+    spec:
+      containers:
+        - name: main
+          image: {{ image }}
+          command: ["python", "{{ main_file }}", "--node", "{{ name }}"]
+          imagePullPolicy: Always
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            {# deployer.py에서 전달받은 환경변수 동적 주입 #}
+            {% if env_vars %}
+            {% for key, value in env_vars.items() %}
+            - name: {{ key }}
+              value: "{{ value }}"
+            {% endfor %}
+            {% endif %}
+          
+          {# GPU나 카메라가 필요하면 Privileged 모드 활성화 #}
+          {% if device in ['camera', 'gpu', 'lidar'] %}
+          securityContext:
+            privileged: true
+          {% endif %}
+
+
+      {# 노드 셀렉터: Gateway는 infra 노드, 나머지는 device 라벨 노드 #}
+      nodeSelector:
+      {% if is_gateway %}
+        edgeflow.io/role: infra
+      {% elif device %}
+        edgeflow.io/device: {{ device }}
+      {% endif %}

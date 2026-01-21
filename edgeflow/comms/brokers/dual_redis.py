@@ -4,10 +4,19 @@ import pickle
 import time
 from .base import BrokerInterface # 기본 추상 클래스
 
+from ...config import settings
+
 #검증 필요
 class DualRedisBroker(BrokerInterface):
-    def __init__(self, ctrl_host='localhost', ctrl_port=6379, 
-                       data_host='localhost', data_port=6380):
+    def __init__(self, ctrl_host=None, ctrl_port=None, 
+                       data_host=None, data_port=None):
+        
+        # 인자 없으면 config.py(환경변수/상수) 값 사용
+        ctrl_host = ctrl_host or settings.REDIS_HOST
+        ctrl_port = ctrl_port or settings.REDIS_PORT
+        data_host = data_host or settings.DATA_REDIS_HOST
+        data_port = data_port or settings.DATA_REDIS_PORT
+
         # 1. 제어용 Redis (큐, 상태)
         self.ctrl_redis = redis.Redis(host=ctrl_host, port=ctrl_port)
         
