@@ -2,11 +2,12 @@
 import socket
 import struct
 import time
-from .base import BaseNode
+from .base import EdgeNode
 from ..comms import Frame
 from ..config import settings
 
-class BridgeNode(BaseNode):
+class BridgeNode(EdgeNode):
+    node_type = "bridge"
     """
     [Redis] -> [Bridge] -> (TCP Socket) -> [Gateway]
     Redis 토픽을 구독(Pop)하여, 결과값을 반환하지 않고 

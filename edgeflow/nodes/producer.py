@@ -1,9 +1,10 @@
 #edgeflow/nodes/producer.py
 import time
-from .base import BaseNode
+from .base import EdgeNode
 from ..comms import Frame  # 기존 Frame 재사용
 
-class ProducerNode(BaseNode):
+class ProducerNode(EdgeNode):
+    node_type = "producer"
     def __init__(self, broker, fps=30, topic="default", queue_size=1, **kwargs):
         super().__init__(broker, **kwargs)
         self.fps = fps

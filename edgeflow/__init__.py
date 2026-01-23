@@ -1,3 +1,2 @@
 #edgeflow/__init__.py
-from .core import EdgeApp
-# from .gateway import BaseGateway
+from .core import System, NodeSpec, EdgeApp  # EdgeApp is alias for backward compat

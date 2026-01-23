@@ -2,11 +2,12 @@
 import asyncio
 import os
 import traceback
-from ..base import BaseNode
+from ..base import EdgeNode
 from ...comms import Frame
 from ...config import settings
 
-class GatewayNode(BaseNode):
+class GatewayNode(EdgeNode):
+    node_type = "gateway"
     def __init__(self, broker=None, **kwargs):
         super().__init__(broker, **kwargs)
         self.tcp_port = settings.GATEWAY_TCP_PORT

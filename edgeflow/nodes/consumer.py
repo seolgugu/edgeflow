@@ -1,9 +1,10 @@
 #edgeflow/nodes/consumer.py
 import os
-from .base import BaseNode
+from .base import EdgeNode
 from ..comms import Frame
 
-class ConsumerNode(BaseNode):
+class ConsumerNode(EdgeNode):
+    node_type = "consumer"
     def __init__(self, broker, replicas=1, **kwargs):
         super().__init__(broker=broker, **kwargs)
         self.replicas = replicas

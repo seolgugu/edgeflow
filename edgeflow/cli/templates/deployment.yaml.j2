@@ -4,8 +4,9 @@ metadata:
   name: {{ name | replace('_', '-') }}
   labels:
     app: {{ name }}
+    edgeflow.io/node-type: "{{ node_type | default('generic') }}"
 spec:
-  replicas: {{ replicas }}
+  replicas: {{ replicas | default(1) }}
   selector:
     matchLabels:
       app: {{ name }}
@@ -17,12 +18,13 @@ spec:
       containers:
         - name: main
           image: {{ image }}
-          command: ["python", "{{ main_file }}", "--node", "{{ name }}"]
+          {# Per-node image: run node module directly #}
+          command: ["python", "-m", "{{ node_module }}"]
           imagePullPolicy: Always
           env:
             - name: PYTHONUNBUFFERED
               value: "1"
-            {# deployer.py에서 전달받은 환경변수 동적 주입 #}
+            {# 환경변수 동적 주입 #}
             {% if env_vars %}
             {% for key, value in env_vars.items() %}
             - name: {{ key }}
@@ -30,14 +32,13 @@ spec:
             {% endfor %}
             {% endif %}
           
-          {# GPU나 카메라가 필요하면 Privileged 모드 활성화 #}
+          {# GPU/Camera: Privileged mode #}
           {% if device in ['camera', 'gpu', 'lidar'] %}
           securityContext:
             privileged: true
           {% endif %}
 
-
-      {# 노드 셀렉터: Gateway는 infra 노드, 나머지는 device 라벨 노드 #}
+      {# Node Selector #}
       nodeSelector:
       {% if is_gateway %}
         edgeflow.io/role: infra

@@ -1,9 +1,10 @@
 from collections import deque
-from .base import BaseNode
+from .base import EdgeNode
 from ..comms import Frame
 import time
 
-class FusionNode(BaseNode):
+class FusionNode(EdgeNode):
+    node_type = "fusion"
     def __init__(self, broker, slop=0.1):
         super().__init__(broker)
         self.input_topics = []

@@ -2,110 +2,164 @@
 import sys
 import argparse
 import time
+import threading
+import importlib
+from dataclasses import dataclass, field
+from typing import Dict, Any, Optional
 from .handlers import RedisHandler, TcpHandler
 from .config import settings
 
+
+@dataclass
+class NodeSpec:
+    """Metadata holder for lazy node loading (Blueprint Pattern)"""
+    path: str                          # e.g., "nodes/camera"
+    config: Dict[str, Any] = field(default_factory=dict)  # replicas, device, fps 등
+    name: str = ""                     # Auto-generated from path if not provided
+    
+    def __post_init__(self):
+        if not self.name:
+            # nodes/camera -> camera, nodes/yolo -> yolo
+            self.name = self.path.replace("/", "_").replace("nodes_", "")
+
+
 class Linker:
-    def __init__(self, app, source_node):
-        self.app = app
-        self.source = source_node
+    def __init__(self, system: 'System', source: NodeSpec):
+        self.system = system
+        self.source = source
 
-    def to(self, target_name, channel=None):
-        target = self.app.nodes[target_name]
+    def to(self, target: NodeSpec, channel: str = None) -> 'Linker':
+        """Register a connection between nodes (lazy, metadata only)"""
+        self.system._links.append({
+            'source': self.source,
+            'target': target,
+            'channel': channel
+        })
+        return Linker(self.system, target)
 
-        # 1. Target이 TCP(Gateway)인 경우 -> TcpHandler 주입
-        if getattr(target, 'input_protocol', 'redis') == 'tcp':
-            
-            source_id = channel if channel else self.source.name
-            
-            # Gateway 정보를 가져옴
-            gw_host = settings.GATEWAY_HOST
-            gw_port = settings.GATEWAY_TCP_PORT
 
-            handler = TcpHandler(gw_host, gw_port, source_id)
-            self.source.output_handlers.append(handler)
-            print(f"🔗 [Direct] {self.source.name} ==(TCP)==> {target.name} (Channel: {source_id})")
-
-        # 2. Target이 일반 노드(Redis)인 경우 -> RedisHandler 주입
-        else:
-            # 토픽 자동 생성: source_to_target
-            topic = f"{self.source.name}_to_{target.name}"
-            
-            # [Target 설정] 받는 쪽은 토픽을 구독해야 함
-            target.input_topics.append(topic)
-
-            limit = getattr(self.source, 'queue_size', 1)
-            handler = RedisHandler(self.app.broker, topic, queue_size=limit)
-            # [Source 설정] 보내는 쪽은 토픽으로 쏴야 함
-            # handler = RedisHandler(self.app.broker, topic)
-            self.source.output_handlers.append(handler)
-            print(f"🔗 [Queue] {self.source.name} --(Redis)--> {target.name} (Topic: {topic})")
-
-        return Linker(self.app, target)
-
-import sys
-import argparse
-import threading
-
-class EdgeApp:
-    def __init__(self, name, broker):
+class System:
+    """
+    Infrastructure Definition (Blueprint Pattern)
+    - Lazy loading: node() does NOT import classes
+    - Wiring: link() stores metadata only
+    - Execution: run() loads classes and executes
+    """
+    def __init__(self, name: str, broker):
         self.name = name
         self.broker = broker
-        self.nodes = {} # {name: instance}
+        self.specs: Dict[str, NodeSpec] = {}
+        self._links = []  # Deferred connections
+        self._instances = {}  # Populated at run()
 
-    def node(self, name, type="producer", replicas=1, device=None, **kwargs):
-        def decorator(cls):
-            # 1. 인스턴스를 미리 생성 (Linker를 위해 필수)
-            instance = cls(broker=self.broker, **kwargs)
+    def node(self, path: str, **kwargs) -> NodeSpec:
+        """Register node by path (lazy loading, no import)"""
+        spec = NodeSpec(path=path, config=kwargs)
+        self.specs[spec.name] = spec
+        return spec
+
+    def link(self, source: NodeSpec) -> Linker:
+        """Create connection builder for wiring nodes"""
+        return Linker(self, source)
+
+    def _load_node_class(self, node_path: str):
+        """Dynamically load EdgeNode subclass from folder"""
+        # nodes/camera -> nodes.camera
+        module_path = node_path.replace("/", ".")
+        module = importlib.import_module(module_path)
+        
+        # Find EdgeNode subclass DEFINED in this module (not imported)
+        from .nodes import EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode, BridgeNode
+        base_classes = {EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode, BridgeNode}
+        
+        for name, obj in vars(module).items():
+            if isinstance(obj, type) and issubclass(obj, EdgeNode):
+                # Skip imported base classes
+                if obj in base_classes:
+                    continue
+                # Only return classes defined in THIS module
+                if obj.__module__ == module.__name__:
+                    return obj
+        
+        raise ImportError(f"No EdgeNode subclass found in {node_path}")
+
+    def _instantiate_nodes(self):
+        """Load and instantiate all registered nodes"""
+        for name, spec in self.specs.items():
+            cls = self._load_node_class(spec.path)
+            instance = cls(broker=self.broker, **spec.config)
             instance.name = name
-            instance.type = type # <-- 누락된 type 추가
-            instance.device = device
-            instance.replicas = replicas
-            # 2. 딕셔너리에 저장
-            self.nodes[name] = instance
-            return cls
-        return decorator
+            self._instances[name] = instance
+            print(f"📦 Loaded: {name} ({cls.__name__}, type={cls.node_type})")
 
-    def link(self, source_name):
-        return Linker(self, self.nodes[source_name])
+    def _wire_connections(self):
+        """Apply registered links to node instances"""
+        for link in self._links:
+            source = self._instances[link['source'].name]
+            target = self._instances[link['target'].name]
+            channel = link.get('channel')
+
+            # Gateway (TCP) connection
+            if getattr(target, 'input_protocol', 'redis') == 'tcp':
+                source_id = channel if channel else source.name
+                gw_host = settings.GATEWAY_HOST
+                gw_port = settings.GATEWAY_TCP_PORT
+                handler = TcpHandler(gw_host, gw_port, source_id)
+                source.output_handlers.append(handler)
+                print(f"🔗 [Direct] {source.name} ==(TCP)==> {target.name} (Channel: {source_id})")
+
+            # Redis connection
+            else:
+                topic = f"{source.name}_to_{target.name}"
+                target.input_topics.append(topic)
+                limit = getattr(source, 'queue_size', 1)
+                handler = RedisHandler(self.broker, topic, queue_size=limit)
+                source.output_handlers.append(handler)
+                print(f"🔗 [Queue] {source.name} --(Redis)--> {target.name} (Topic: {topic})")
 
     def run(self):
         """
         [Hybrid Run Mode]
-        1. 인자가 있으면 -> 해당 노드만 실행 (분산 환경용)
-        2. 인자가 없으면 -> 모든 노드 스레드로 실행 (테스트용)
+        1. --node <name> -> Run single node (distributed)
+        2. No args -> Run all nodes in threads (local test)
         """
         parser = argparse.ArgumentParser()
         parser.add_argument("--node", help="Run specific node only")
         args, unknown = parser.parse_known_args()
 
+        # Load and wire nodes
+        print("📦 Loading nodes...")
+        self._instantiate_nodes()
+        print("🔗 Wiring connections...")
+        self._wire_connections()
+
         target_name = args.node
 
-        # [Mode 1: 분산 실행] python main.py --node cam
+        # [Mode 1: Distributed] python main.py --node cam
         if target_name:
-            if target_name in self.nodes:
+            if target_name in self._instances:
                 print(f"▶️ [Distributed] Launching single node: {target_name}")
-                node = self.nodes[target_name]
-                node.execute() # 블로킹 실행 (하나만 도니까)
+                node = self._instances[target_name]
+                node.execute()
             else:
-                print(f"❌ Node '{target_name}' not found. Available: {list(self.nodes.keys())}")
+                print(f"❌ Node '{target_name}' not found. Available: {list(self._instances.keys())}")
 
-        # [Mode 2: 통합 시뮬레이션] python main.py
+        # [Mode 2: Local Simulation] python main.py
         else:
-            print(f"▶️ [Local] Launching ALL nodes ({len(self.nodes)})")
+            print(f"▶️ [Local] Launching ALL nodes ({len(self._instances)})")
             threads = []
-            for name, node in self.nodes.items():
-                # 스레드로 감싸서 실행
+            for name, node in self._instances.items():
                 t = threading.Thread(target=node.execute, daemon=True)
                 t.start()
                 threads.append(t)
-            
 
             try:
-                # 메인 스레드는 대기 (join 대신 sleep을 써야 시그널을 잘 받음)
-                while True: 
+                while True:
                     time.sleep(0.5)
             except KeyboardInterrupt:
-                print("\n👋 App Shutdown - Stopping all nodes...")
-                # 필요하다면 여기서 각 노드의 리소스를 정리하는 로직 추가 가능
+                print("\n👋 System Shutdown - Stopping all nodes...")
                 sys.exit(0)
+
+
+# Backward compatibility alias
+EdgeApp = System

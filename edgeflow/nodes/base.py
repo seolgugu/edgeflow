@@ -3,7 +3,9 @@ from abc import ABC, abstractmethod
 import os
 from ..comms import RedisBroker
 
-class BaseNode(ABC):
+class EdgeNode(ABC):
+    """Base class for all edge nodes. Type is identified via inheritance."""
+    node_type = "generic"
     def __init__(self, broker=None, **kwargs):
         self.running = True
         self.__dict__.update(kwargs) # 메타데이터(node_port 등) 저장
