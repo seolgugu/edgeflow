@@ -1,5 +1,5 @@
 # examples/my-robot/nodes/camera/__init__.py
-"""Camera node - ProducerNode example"""
+"""Camera node - ProducerNode example (Arduino Pattern)"""
 
 import time
 import os
@@ -12,11 +12,13 @@ from edgeflow.nodes import ProducerNode
 class Camera(ProducerNode):
     """Fake camera that produces animated ball frames"""
     
-    def configure(self):
+    def setup(self):
+        """한 번만 실행: 초기화"""
         self.hostname = os.getenv("HOSTNAME", "localhost")
         print(f"📸 [Camera] Initialized on host: {self.hostname}")
 
-    def produce(self):
+    def loop(self):
+        """반복 실행: 프레임 생성 및 반환"""
         # Create dark background
         img = np.zeros((480, 640, 3), dtype=np.uint8)
         img[:] = (30, 30, 30)

@@ -1,5 +1,5 @@
 # examples/my-robot/nodes/yolo/__init__.py
-"""YOLO processor node - ConsumerNode example"""
+"""YOLO processor node - ConsumerNode example (Arduino Pattern)"""
 
 import time
 import os
@@ -11,11 +11,13 @@ from edgeflow.nodes import ConsumerNode
 class YoloProcessor(ConsumerNode):
     """Fake GPU processor that adds detection overlay"""
     
-    def configure(self):
+    def setup(self):
+        """한 번만 실행: 모델 로딩 등 초기화"""
         self.hostname = os.getenv("HOSTNAME", "localhost")
         print(f"🧠 [GPU] Initialized on host: {self.hostname}")
 
-    def process(self, frame):
+    def loop(self, frame):
+        """반복 실행: 프레임 처리 및 반환"""
         processed = frame.copy()
         
         # Add fake detection box

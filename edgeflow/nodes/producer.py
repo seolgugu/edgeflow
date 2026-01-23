@@ -1,41 +1,61 @@
 #edgeflow/nodes/producer.py
+"""
+ProducerNode - 데이터 생성 노드 (카메라, 센서 등)
+
+Arduino Pattern:
+- setup(): 초기화
+- loop(): 데이터 생성 및 반환 (return으로 Frame 전송)
+"""
 import time
 from .base import EdgeNode
-from ..comms import Frame  # 기존 Frame 재사용
+from ..comms import Frame
+
 
 class ProducerNode(EdgeNode):
+    """데이터를 생성하여 다운스트림으로 전송하는 노드"""
     node_type = "producer"
+    
     def __init__(self, broker, fps=30, topic="default", queue_size=1, **kwargs):
         super().__init__(broker, **kwargs)
         self.fps = fps
         self.queue_size = queue_size
+        self._frame_id = 0
 
-    def produce(self):
-        """사용자가 구현해야 할 메소드"""
-        raise NotImplementedError
+    def loop(self):
+        """
+        [User Hook] 데이터를 생성하여 반환
+        - return: 이미지/데이터 (자동으로 Frame으로 포장되어 전송됨)
+        - return None: 루프 종료
+        """
+        raise NotImplementedError("ProducerNode requires loop() implementation")
 
-    def run(self):
+    def _run_loop(self):
+        """[Internal] FPS에 맞춰 loop() 반복 호출"""
         print(f"🚀 Producer started (FPS: {self.fps})")
-        frame_id = 0
+        
         while self.running:
             start = time.time()
             
-            # 사용자 로직 실행
-            raw_data = self.produce()
-            if raw_data is None: break
+            # 사용자 loop() 실행
+            raw_data = self.loop()
+            if raw_data is None:
+                break
 
-            # Frame 포장 (기존 로직)
+            # Frame 포장
             if isinstance(raw_data, Frame):
                 frame = raw_data
                 if frame.frame_id == 0:
-                    frame.frame_id = frame_id
+                    frame.frame_id = self._frame_id
             else:
-                frame = Frame(frame_id=frame_id, timestamp=time.time(), data=raw_data)
+                frame = Frame(
+                    frame_id=self._frame_id, 
+                    timestamp=time.time(), 
+                    data=raw_data
+                )
             
             self.send_result(frame)
+            self._frame_id += 1
             
-            frame_id += 1
-            
-            # FPS 제어 (테스트용 fps 제한 기능)
+            # FPS 제어
             elapsed = time.time() - start
-            time.sleep(max(0, (1.0/self.fps) - elapsed))
+            time.sleep(max(0, (1.0 / self.fps) - elapsed))
