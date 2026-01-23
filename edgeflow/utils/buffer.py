@@ -8,7 +8,7 @@ class TimeJitterBuffer:
     - buffer_delay == 0: 들어오는 즉시 재생 (Low Latency)
     - max_size: 최대 버퍼 크기 (초과 시 가장 오래된 프레임 삭제, 메모리 누수 방지)
     """
-    def __init__(self, buffer_delay=0.2, max_size=60):
+    def __init__(self, buffer_delay=0.0, max_size=60):
         self.buffer_delay = buffer_delay
         self.max_size = max_size  # 30fps 기준 약 2초 분량
         self.heap = [] # (timestamp, data_bytes)

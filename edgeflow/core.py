@@ -1,6 +1,7 @@
 #edgeflow/core.py
 import sys
 import argparse
+import time
 from .handlers import RedisHandler, TcpHandler
 from .config import settings
 
@@ -99,8 +100,12 @@ class EdgeApp:
                 t.start()
                 threads.append(t)
             
+
             try:
-                # 메인 스레드는 대기
-                for t in threads: t.join()
+                # 메인 스레드는 대기 (join 대신 sleep을 써야 시그널을 잘 받음)
+                while True: 
+                    time.sleep(0.5)
             except KeyboardInterrupt:
-                print("\n👋 App Shutdown")
+                print("\n👋 App Shutdown - Stopping all nodes...")
+                # 필요하다면 여기서 각 노드의 리소스를 정리하는 로직 추가 가능
+                sys.exit(0)
