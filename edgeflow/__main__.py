@@ -2,7 +2,7 @@
 import argparse
 import sys
 from .cli.inspector import inspect_app
-from .cli.deployer import deploy_to_k8s
+from .cli.deployer import deploy_to_k8s, cleanup_namespace
 from .cli.manager import add_dependency, show_logs
 
 def main():
@@ -21,7 +21,25 @@ def main():
     deploy.set_defaults(build=True)
 
     # ==========================
+    # 2. CLEAN Command (New)
+    # ==========================
+    clean = subparsers.add_parser("clean", help="Clean up namespace resources")
+    clean.add_argument("--namespace", "-n", default="edgeflow", help="K8s Namespace")
+
+    # ==========================
     # 2. ADD Command (Package)
+
+# ... inside _handle_deploy ...
+
+        deploy_to_k8s(
+            system=system,
+            registry=args.registry,
+            namespace=args.namespace,
+            build=args.build,
+            push=args.build,
+            dry_run=args.dry_run,
+            clean=args.clean
+        )
     # ==========================
     add = subparsers.add_parser("add", help="Add dependency to node.toml")
     add.add_argument("package", help="Package Name (e.g. numpy)")
@@ -39,6 +57,8 @@ def main():
     # Dispatch Commands
     if args.command == "deploy":
         _handle_deploy(args)
+    elif args.command == "clean":
+        cleanup_namespace(args.namespace)
     elif args.command == "add":
         add_dependency(args.package, args.node)
     elif args.command == "logs":
