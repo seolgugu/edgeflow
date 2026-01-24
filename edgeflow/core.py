@@ -43,7 +43,7 @@ class System:
     Infrastructure Definition (Blueprint Pattern)
     - Lazy loading: node() does NOT import classes
     - Wiring: link() stores metadata only
-    - Execution: run() loads classes and executes
+    - Execution: run() loads classes and executesk
     """
     def __init__(self, name: str, broker):
         self.name = name
