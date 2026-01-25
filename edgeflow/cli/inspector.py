@@ -21,7 +21,7 @@ def inspect_app(file_path):
     for attr_name in dir(module):
         attr = getattr(module, attr_name)
         # 클래스 이름 체크 등으로 EdgeApp 인스턴스인지 확인
-        if hasattr(attr, 'nodes') and hasattr(attr, 'run'):
+        if (hasattr(attr, 'specs') or hasattr(attr, 'nodes')) and hasattr(attr, 'run'):
             return attr
             
     raise ValueError("Could not find 'app' instance in main.py")

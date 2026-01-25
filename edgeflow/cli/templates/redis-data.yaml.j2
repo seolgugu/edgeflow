@@ -3,6 +3,7 @@ kind: Service
 metadata:
   name: edgeflow-redis-data-service  # ⭐ 데이터 전용 Redis 서비스 이름
 spec:
+  clusterIP: None  #  Headless Service (Direct Pod IP Access)
   ports:
     - port: 6380      # 외부에서는 6380으로 접속
       targetPort: 6379 # 내부에서는 6379로 받음 (표준 이미지 사용)

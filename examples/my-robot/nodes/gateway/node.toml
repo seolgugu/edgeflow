@@ -1,0 +1,6 @@
+[build]
+base = "python:3.10-slim"
+dependencies = ["aiohttp"]
+
+[runtime]
+gpu = false

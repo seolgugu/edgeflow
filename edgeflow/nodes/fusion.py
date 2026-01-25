@@ -1,9 +1,19 @@
 from collections import deque
-from .base import BaseNode
+from .base import EdgeNode
 from ..comms import Frame
 import time
 
-class FusionNode(BaseNode):
+
+class FusionNode(EdgeNode):
+    """
+    FusionNode - 멀티 센서 데이터 동기화 노드
+    
+    Arduino Pattern:
+    - setup(): 초기화
+    - loop(frames): 동기화된 프레임들 처리
+    """
+    node_type = "fusion"
+    
     def __init__(self, broker, slop=0.1):
         super().__init__(broker)
         self.input_topics = []
@@ -11,18 +21,17 @@ class FusionNode(BaseNode):
         self.slop = slop
         self.buffers = {}
 
-    def configure(self):
-        pass
-
-    def setup(self):
-        self.configure()
+    def _setup(self):
+        """[Internal] 버퍼 초기화 후 사용자 setup() 호출"""
+        self.setup()
         self.buffers = {t: deque(maxlen=50) for t in self.input_topics}
         print(f"🔗 SyncNode Listening on: {self.input_topics} -> Output: {self.output_topic}")
 
-    def process(self, frames):
-        raise NotImplementedError
-    
-    def run(self):
+    def loop(self, frames):
+        """[User Hook] 동기화된 프레임들을 처리하여 반환"""
+        raise NotImplementedError("FusionNode requires loop(frames) implementation")
+
+    def _run_loop(self):
         while self.running:
             for topic in self.input_topics:
                 data = self.broker.pop(topic, timeout=0.01)
@@ -74,8 +83,8 @@ class FusionNode(BaseNode):
             for i, topic in enumerate(self.input_topics[1:]):
                 self._remove_frame(topic, matched_frames[i+1])
             
-            # 2. 프로세스 실행
-            result = self.process(matched_frames)
+            # 2. 사용자 loop() 실행
+            result = self.loop(matched_frames)
 
             # 3. 결과 전송
             if result is not None:

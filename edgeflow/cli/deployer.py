@@ -1,14 +1,27 @@
+# edgeflow/cli/deployer.py
+"""K8s deployment system for per-node container architecture"""
+
 import time
 import os
 import yaml
 import datetime
+from pathlib import Path
+from typing import Dict, List, Any, Optional
 from jinja2 import Template
 from kubernetes import client, config
-from edgeflow.constants import REDIS_HOST, REDIS_PORT, GATEWAY_TCP_PORT, GATEWAY_HTTP_PORT, DATA_REDIS_HOST, DATA_REDIS_PORT # 상수 임포트 필수
 
-def ensure_namespace(k8s_core, namespace):
-    """네임스페이스 존재 확인 및 생성"""
-    if namespace == "default": return
+from edgeflow.constants import (
+    REDIS_HOST, REDIS_PORT, 
+    GATEWAY_TCP_PORT, GATEWAY_HTTP_PORT, 
+    DATA_REDIS_HOST, DATA_REDIS_PORT
+)
+from .builder import build_all_nodes
+
+
+def ensure_namespace(k8s_core, namespace: str):
+    """Ensure namespace exists, create if not"""
+    if namespace == "default":
+        return
 
     try:
         k8s_core.read_namespace(name=namespace)
@@ -24,10 +37,9 @@ def ensure_namespace(k8s_core, namespace):
         else:
             raise e
 
-from edgeflow.comms.brokers.dual_redis import DualRedisBroker # 타입 체크용
 
-def ensure_infra_resource(k8s_apps, k8s_core, namespace, template_name):
-    """지정된 인프라 템플릿(Redis 등) 배포 헬퍼"""
+def ensure_infra_resource(k8s_apps, k8s_core, namespace: str, template_name: str):
+    """Deploy infrastructure template (Redis etc.)"""
     tpl_path = os.path.join(os.path.dirname(__file__), 'templates', template_name)
     with open(tpl_path) as f:
         manifests = list(yaml.safe_load_all(f.read()))
@@ -50,89 +62,200 @@ def ensure_infra_resource(k8s_apps, k8s_core, namespace, template_name):
             else:
                 raise e
 
-def ensure_infrastructure(k8s_apps, k8s_core, app_broker, namespace="default"):
-    """
-    브로커 타입에 따라 필요한 Redis 인프라를 동적으로 배포
-    """
-    print(f"🔍 Checking Infrastructure for {app_broker.__class__.__name__}...")
+
+def ensure_infrastructure(k8s_apps, k8s_core, broker, namespace: str = "default"):
+    """Deploy required Redis infrastructure based on broker type"""
+    from edgeflow.comms.brokers.dual_redis import DualRedisBroker
     
-    # 1. 기본 Redis (Control Plane) - 항상 배포
+    print(f"🔍 Checking Infrastructure for {broker.__class__.__name__}...")
+    
+    # Basic Redis (Control Plane) - always deploy
     ensure_infra_resource(k8s_apps, k8s_core, namespace, 'redis.yaml.j2')
 
-    # 2. Dual Mode인 경우 -> Data Redis 추가 배포
-    if isinstance(app_broker, DualRedisBroker):
+    # Dual Mode -> also deploy Data Redis
+    if isinstance(broker, DualRedisBroker):
         print(f"  🚀 Dual Mode Detected! Deploying Data Redis...")
         ensure_infra_resource(k8s_apps, k8s_core, namespace, 'redis-data.yaml.j2')
     
     print("  ✅ Infrastructure Ready.")
 
-def deploy_to_k8s(app, image_tag, file_path="main.py", namespace="default"):
-    # 템플릿 로드 (Deployment용)
-    dep_tpl_path = os.path.join(os.path.dirname(__file__), 'templates', 'deployment.yaml.j2')
-    with open(dep_tpl_path) as f:
-        dep_template = Template(f.read())
 
-    # 템플릿 로드 (Gateway Service용 - 새로 추가해야 함!)
-    svc_tpl_path = os.path.join(os.path.dirname(__file__), 'templates', 'service.yaml.j2')
-    has_svc_tpl = os.path.exists(svc_tpl_path)
+def deploy_to_k8s(
+    system,  # System instance
+    registry: str,
+    namespace: str = "default",
+    build: bool = True,
+    push: bool = True,
+    dry_run: bool = False
+):
+    """
+    Deploy System to Kubernetes with per-node images.
+    
+    Args:
+        system: System instance with registered nodes
+        registry: Docker registry URL
+        namespace: K8s namespace
+        build: Whether to build images before deploy
+        push: Whether to push images to registry
+        dry_run: If True, save manifests to .build/ instead of applying
+    """
+    project_root = Path.cwd()
+    
+    # Load templates
+    tpl_dir = Path(__file__).parent / 'templates'
+    with open(tpl_dir / 'deployment.yaml.j2') as f:
+        dep_template = Template(f.read())
+    
+    svc_tpl_path = tpl_dir / 'service.yaml.j2'
+    has_svc_tpl = svc_tpl_path.exists()
     if has_svc_tpl:
         with open(svc_tpl_path) as f:
             svc_template = Template(f.read())
 
-    # K8s 연결 (K3s 자동 감지 포함)
+    # Build per-node images
+    node_paths = [spec.path for spec in system.specs.values()]
+    
+    if build:
+        images = build_all_nodes(
+            project_root=project_root,
+            node_paths=node_paths,
+            registry=registry,
+            push=push,
+            dry_run=dry_run
+        )
+    else:
+        # Assume images already exist
+        images = {
+            path: f"{registry}/{project_root.name}-{path.replace('/', '-')}:latest"
+            for path in node_paths
+        }
+
+    if dry_run:
+        # Save manifests to .build/
+        manifest_dir = project_root / ".build" / "manifests"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        print(f"📄 [Dry-run] Saving manifests to {manifest_dir}")
+        
+        for name, spec in system.specs.items():
+            image_tag = images.get(spec.path, "unknown")
+            node_type = spec.config.get("type", "generic")
+            is_gateway = node_type == "gateway"
+            
+            yaml_str = dep_template.render(
+                name=name.replace('_', '-'),
+                image=image_tag,
+                node_module=spec.path.replace("/", "."),
+                device=spec.config.get("device"),
+                replicas=spec.config.get("replicas", 1),
+                is_gateway=is_gateway,
+                env_vars={
+                    "REDIS_HOST": f"{REDIS_HOST}.{namespace}.svc.cluster.local",
+                    "REDIS_PORT": str(REDIS_PORT),
+                    "DATA_REDIS_HOST": f"{DATA_REDIS_HOST}.{namespace}.svc.cluster.local",
+                    "DATA_REDIS_PORT": str(DATA_REDIS_PORT),
+                    "GATEWAY_HOST": f"gateway-svc.{namespace}.svc.cluster.local",
+                    "GATEWAY_TCP_PORT": str(GATEWAY_TCP_PORT),
+                    "NODE_NAME": name
+                }
+            )
+            
+            manifest_path = manifest_dir / f"{name.replace('_', '-')}-deployment.yaml"
+            manifest_path.write_text(yaml_str)
+            print(f"  📄 Saved: {manifest_path}")
+        
+        return
+
+    # Connect to K8s
     try:
         config.load_kube_config()
     except Exception:
-        # K3s 전용 경로 시도
         k3s_config = "/etc/rancher/k3s/k3s.yaml"
         if os.path.exists(k3s_config):
             print(f"📁 Using K3s config: {k3s_config}")
             config.load_kube_config(config_file=k3s_config)
         else:
-            raise Exception("kubeconfig not found. Run: sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config")
+            raise Exception("kubeconfig not found")
+    
     k8s_apps = client.AppsV1Api()
     k8s_core = client.CoreV1Api()
+    
+def cleanup_namespace(namespace: str = "default"):
+    """Delete all EdgeFlow deployments and services in namespace"""
+    try:
+        config.load_kube_config()
+    except Exception:
+        # Try k3s config location default
+        k3s_config = "/etc/rancher/k3s/k3s.yaml"
+        if os.path.exists(k3s_config):
+            config.load_kube_config(config_file=k3s_config)
+            
+    k8s_apps = client.AppsV1Api()
+    k8s_core = client.CoreV1Api()
+    
+    try:
+        k8s_core.read_namespace(name=namespace)
+    except client.exceptions.ApiException:
+        print(f"⚠️ Namespace '{namespace}' does not exist.")
+        return
 
-    # 0. 네임스페이스 준비
+    print(f"🧹 Clearing existing resources in '{namespace}'...")
+    
+    # Delete All Deployments
+    deps = k8s_apps.list_namespaced_deployment(namespace)
+    for d in deps.items:
+        # Skip Redis infrastructure
+        if 'redis' in d.metadata.name:
+            continue
+        k8s_apps.delete_namespaced_deployment(name=d.metadata.name, namespace=namespace)
+        print(f"  - Deleted Deployment: {d.metadata.name}")
+        
+    # Delete All Services
+    svcs = k8s_core.list_namespaced_service(namespace)
+    for s in svcs.items:
+        if 'redis' in s.metadata.name or s.metadata.name == 'kubernetes':
+            continue
+        k8s_core.delete_namespaced_service(name=s.metadata.name, namespace=namespace)
+        print(f"  - Deleted Service: {s.metadata.name}")
+    
+    print("✅ Cleanup complete.")
+
+
+    # Prepare namespace
     ensure_namespace(k8s_core, namespace)
 
-    # 1. 인프라 체크 (Smart Detection)
-    ensure_infrastructure(k8s_apps, k8s_core, app.broker, namespace)
+    # Check infrastructure
+    ensure_infrastructure(k8s_apps, k8s_core, system.broker, namespace)
 
-    print(f"🚀 Deploying {len(app.nodes)} nodes to namespace '{namespace}'...")
+    print(f"🚀 Deploying {len(system.specs)} nodes to namespace '{namespace}'...")
 
-    # 실행 파일명 추출 (예: c:/.../main.py -> main.py)
-    main_file_name = os.path.basename(file_path)
-
-    # 2. 노드별 배포
-    for name, node in app.nodes.items():
-        # ---------------------------------------------------------
-        # A. Deployment 생성 (공통)
-        # ---------------------------------------------------------
-        # Gateway 타입 여부 확인
-        is_gateway = (getattr(node, 'type', None) == 'gateway')
+    # Deploy each node
+    for name, spec in system.specs.items():
+        image_tag = images.get(spec.path, "unknown")
+        
+        # Detect gateway type (will be determined at load time in new architecture)
+        # For now, check config or path
+        is_gateway = "gateway" in spec.path.lower() or spec.config.get("node_port") is not None
 
         yaml_str = dep_template.render(
-            name=name,
-            main_file=main_file_name,  # [신규] 동적 실행 파일명 전달
+            name=name.replace('_', '-'),
             image=image_tag,
-            device=getattr(node, 'device', None),
-            replicas=getattr(node, 'replicas', 1),
-            is_gateway=is_gateway, # 템플릿에 전달하여 role:infra 할당 유도
-            # 프레임워크 내부 통신용 환경변수 주입
+            node_module=spec.path.replace("/", "."),
+            device=spec.config.get("device"),
+            replicas=spec.config.get("replicas", 1),
+            is_gateway=is_gateway,
             env_vars={
-                "REDIS_HOST": f"{REDIS_HOST}.{namespace}.svc.cluster.local", # 네임스페이스 포함 DNS
+                "REDIS_HOST": f"{REDIS_HOST}.{namespace}.svc.cluster.local",
                 "REDIS_PORT": str(REDIS_PORT),
-                "DATA_REDIS_HOST": f"{DATA_REDIS_HOST}.{namespace}.svc.cluster.local", # [신규] Data Redis
+                "DATA_REDIS_HOST": f"{DATA_REDIS_HOST}.{namespace}.svc.cluster.local",
                 "DATA_REDIS_PORT": str(DATA_REDIS_PORT),
-                "GATEWAY_HOST": f"gateway-svc.{namespace}.svc.cluster.local", # [신규] Gateway 주소 주입
-                "GATEWAY_TCP_PORT": str(GATEWAY_TCP_PORT), # [상수] TCP 포트
+                "GATEWAY_HOST": f"gateway-svc.{namespace}.svc.cluster.local",
+                "GATEWAY_TCP_PORT": str(GATEWAY_TCP_PORT),
                 "NODE_NAME": name
             }
         )
         manifest = yaml.safe_load(yaml_str)
 
-        # ⭐ 핵심: 강제 재시작을 위해 Annotation에 배포 시간 기록
+        # Force restart with annotation
         if 'annotations' not in manifest['spec']['template']['metadata']:
             manifest['spec']['template']['metadata']['annotations'] = {}
         manifest['spec']['template']['metadata']['annotations']['kubectl.kubernetes.io/restartedAt'] = datetime.datetime.now().isoformat()
@@ -141,52 +264,42 @@ def deploy_to_k8s(app, image_tag, file_path="main.py", namespace="default"):
             k8s_apps.create_namespaced_deployment(namespace=namespace, body=manifest)
             print(f"  + [App] Created: {name}")
         except client.exceptions.ApiException as e:
-            if e.status == 409: # Already Exists -> Update
-                k8s_apps.patch_namespaced_deployment(name=manifest['metadata']['name'], namespace=namespace, body=manifest)
+            if e.status == 409:
+                k8s_apps.patch_namespaced_deployment(
+                    name=manifest['metadata']['name'], 
+                    namespace=namespace, 
+                    body=manifest
+                )
                 print(f"  * [App] Updated: {name} (Rolling Update)")
             else:
                 raise e
 
-        # ---------------------------------------------------------
-        # B. Service 생성 (Gateway 타입인 경우만)
-        # ---------------------------------------------------------
-        if getattr(node, 'type', None) == 'gateway' and has_svc_tpl:
-            # nodePort만 사용자 설정 가능, 내부 port는 프레임워크 고정
-            gateway_node_port = getattr(node, 'node_port', 30000)  # None이면 K8s 자동 할당
+        # Deploy Service for Gateway
+        if is_gateway and has_svc_tpl:
+            gateway_node_port = spec.config.get("node_port", 30000)
             
             svc_yaml = svc_template.render(
                 name=name,
-                port=GATEWAY_HTTP_PORT,  # [상수] 웹 인터페이스
-                tcp_port=GATEWAY_TCP_PORT, # [상수] 내부 통신용 TCP
+                port=GATEWAY_HTTP_PORT,
+                tcp_port=GATEWAY_TCP_PORT,
                 node_port=gateway_node_port
             )
             svc_manifest = yaml.safe_load(svc_yaml)
             
             try:
                 k8s_core.create_namespaced_service(namespace=namespace, body=svc_manifest)
-                port_msg = f":{gateway_node_port}" if gateway_node_port else " (auto-assigned)"
-                print(f"  + [Svc] Exposed Gateway: http://<NODE-IP>{port_msg}")
+                print(f"  + [Svc] Exposed Gateway: http://<NODE-IP>:{gateway_node_port}")
             except client.exceptions.ApiException as e:
                 if e.status == 409:
-                    # 서비스 설정 변경(포트 등) 반영을 위해 과감하게 재생성 (개발 편의성)
-                    print(f"  🔄 Service exists. Re-creating to apply changes...")
-                    k8s_core.delete_namespaced_service(name=svc_manifest['metadata']['name'], namespace=namespace)
-                    config.time.sleep(1) # 삭제 대기
+                    print(f"  🔄 Service exists. Re-creating...")
+                    k8s_core.delete_namespaced_service(
+                        name=svc_manifest['metadata']['name'], 
+                        namespace=namespace
+                    )
+                    time.sleep(1)
                     k8s_core.create_namespaced_service(namespace=namespace, body=svc_manifest)
-                    port_msg = f":{gateway_node_port}" if gateway_node_port else " (auto-assigned)"
-                    print(f"  + [Svc] Re-created Gateway Service: http://<NODE-IP>{port_msg}")
-                # [신규] 포트 충돌(422) 시 강제 삭제 후 재생성 시도
-                elif e.status == 422 and "provided port is already allocated" in str(e.body):
-                    print(f"  ⚠️ Port {gateway_node_port} conflict detected. Deleting existing service...")
-                    try:
-                        # 기존 서비스 삭제 (이름으로 삭제)
-                        k8s_core.delete_namespaced_service(name=svc_manifest['metadata']['name'], namespace=namespace)
-                        print("  🗑️ Debug: Deleted conflicting service.")
-                        # 잠시 대기 후 재생성
-                        k8s_core.create_namespaced_service(namespace=namespace, body=svc_manifest)
-                        print(f"  + [Svc] Re-created Gateway Service on port {gateway_node_port}")
-                    except Exception as retry_e:
-                        print(f"  ❌ Failed to resolve port conflict: {retry_e}")
-                        raise retry_e
+                    print(f"  + [Svc] Re-created: http://<NODE-IP>:{gateway_node_port}")
                 else:
                     raise e
+
+    print(f"✅ Deployment complete!")

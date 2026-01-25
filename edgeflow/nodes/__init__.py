@@ -1,11 +1,21 @@
 #edgeflow/nodes/__init__.py
-from .base import BaseNode
+"""
+EdgeFlow Node Types (Arduino Pattern)
+- setup(): 한 번만 실행
+- loop(): 반복 실행
+"""
+from .base import EdgeNode
 from .producer import ProducerNode
 from .consumer import ConsumerNode
 from .fusion import FusionNode
-from .bridge import BridgeNode
-# from .sink import SinkNode
-# [수정] gateway 폴더 안의 core에서 가져옴
-from .gateway.core import GatewayNode 
+from .sink import SinkNode
+from .gateway.core import GatewayNode
 
-__all__ = ["BaseNode", "ProducerNode", "ConsumerNode", "GatewayNode", "FusionNode", "BridgeNode"]
+__all__ = [
+    "EdgeNode", 
+    "ProducerNode", 
+    "ConsumerNode", 
+    "GatewayNode", 
+    "FusionNode",
+    "SinkNode"
+]
