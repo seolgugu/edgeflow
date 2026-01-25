@@ -75,4 +75,4 @@ class ConsumerNode(EdgeNode):
                 self.send_result(resp)
 
             except Exception as e:
-                print(f"⚠️ Consumer Error: {e}")
+                print(f"⚠️ Consumer Error in node '{self.name}': {e}")
