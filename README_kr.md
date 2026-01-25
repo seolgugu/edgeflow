@@ -92,7 +92,7 @@ class Camera(ProducerNode):
 from edgeflow import System
 
 # 시스템 초기화 (브로커 설정)
-sys = System("my-robot", broker_config={"host": "localhost", "port": 6379})
+sys = System("my-robot", broker=DualRedisBroker())
 
 # 노드 등록: 클래스를 import 하지 않고 경로만 지정
 cam = sys.node("nodes/camera", fps=30)
