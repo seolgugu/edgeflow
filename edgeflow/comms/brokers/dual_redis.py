@@ -1,6 +1,6 @@
 # edgeflow/comms/brokers/dual_redis.py
-import redis
-import pickle
+import redis.exceptions
+import struct
 import time
 from .base import BrokerInterface # 기본 추상 클래스
 
@@ -21,16 +21,41 @@ class DualRedisBroker(BrokerInterface):
         self.ctrl_redis = redis.Redis(host=ctrl_host, port=ctrl_port)
         
         # 2. 데이터용 Redis (이미지 저장소)
-        self.data_redis = redis.Redis(host=data_host, port=data_port)
+        # 스마트 로컬 감지: localhost인 경우 연결 테스트 후 폴백
+        self.data_redis = self._connect_data_redis(data_host, data_port, ctrl_port)
+
+    def _connect_data_redis(self, host, port, fallback_port):
+        """
+        Data Redis 연결 시도. 실패 시(로컬 환경 등) Control Redis 포트로 폴백.
+        """
+        # 1. 원래 설정대로 연결 시도 (Timeout 0.5초로 줄임)
+        r = redis.Redis(host=host, port=port, socket_connect_timeout=0.5)
+        
+        # 로컬호스트가 아니면 바로 리턴 (프로덕션/K8s 환경은 설정 무조건 신뢰)
+        if host not in ("localhost", "127.0.0.1"):
+            return r
+
+        try:
+            r.ping()
+            return r
+        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError):
+            # 2. 연결 실패 시 폴백 시도
+            print(f"⚠️ [DualRedis] Failed to connect to Data Redis at {host}:{port}.")
+            print(f"🔄 [DualRedis] Falling back to Control Redis port ({fallback_port}) for local testing.")
+            
+            fallback_r = redis.Redis(host=host, port=fallback_port)
+            return fallback_r
 
     def push(self, topic, frame_bytes):
         """
         데이터는 Data Redis에 저장하고, ID만 Ctrl Redis 큐에 넣음
         """
-        # (편의상 frame_bytes를 객체로 복원해서 ID 추출한다고 가정)
-        # 실제로는 bytes 헤더에서 ID만 빠르게 읽는 게 좋음
-        frame_obj = pickle.loads(frame_bytes)
-        frame_id = frame_obj.frame_id
+        if len(frame_bytes) < 4:
+            return
+
+        # [수정] Pickle 대신 Frame 헤더(struct)에서 직접 ID 추출
+        # Frame.to_bytes()의 첫 4바이트는 frame_id (unsigned int, big-endian)
+        frame_id = struct.unpack('!I', frame_bytes[:4])[0]
         
         # 1. [Data Plane] 무거운 데이터 저장 (Key-Value)
         # Expiry(만료 시간) 5초를 줘서 나중에 자동 삭제되게 함 (메모리 관리)

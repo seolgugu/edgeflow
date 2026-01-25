@@ -3,6 +3,7 @@ kind: Service
 metadata:
   name: edgeflow-redis-service  # ⭐ 앱들이 이 이름으로 접속함
 spec:
+  clusterIP: None  # Headless Service (Direct Pod IP Access)
   ports:
     - port: 6379
       targetPort: 6379

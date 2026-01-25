@@ -4,10 +4,10 @@ Edgeflow v0.2.0 Example - Folder-based Node Definition
 """
 
 from edgeflow import System
-from edgeflow.comms import RedisBroker
+from edgeflow.comms import RedisBroker, DualRedisBroker
 
 # System 초기화 (broker 의존성 주입)
-sys = System("my-robot", broker=RedisBroker())
+sys = System("my-robot", broker=DualRedisBroker())
 
 # ============================================================
 # 노드 등록 (폴더 경로로 참조 - lazy loading)
