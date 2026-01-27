@@ -3,7 +3,10 @@ import argparse
 import sys
 from .cli.inspector import inspect_app
 from .cli.deployer import deploy_to_k8s, cleanup_namespace
-from .cli.manager import add_dependency, show_logs, upgrade_framework
+from .cli.manager import (
+    add_dependency, show_logs, upgrade_framework, 
+    open_dashboard, init_project, check_environment
+)
 
 def main():
     parser = argparse.ArgumentParser(description="EdgeFlow CLI v0.2.0")
@@ -12,7 +15,7 @@ def main():
     # ==========================
     # 1. DEPLOY Command
     # ==========================
-    deploy = subparsers.add_parser("deploy")
+    deploy = subparsers.add_parser("deploy", help="Deploy to Kubernetes")
     deploy.add_argument("file", help="Path to main.py")
     deploy.add_argument("--registry", default="localhost:5000", help="Docker Registry")
     deploy.add_argument("--namespace", default="edgeflow", help="K8s Namespace")
@@ -21,27 +24,45 @@ def main():
     deploy.set_defaults(build=True)
 
     # ==========================
-    # 2. CLEAN Command (New)
+    # 2. CLEAN Command
     # ==========================
     clean = subparsers.add_parser("clean", help="Clean up namespace resources")
     clean.add_argument("--namespace", "-n", default="edgeflow", help="K8s Namespace")
 
     # ==========================
-    # 2. ADD Command (Package)
+    # 3. ADD Command
     # ==========================
     add = subparsers.add_parser("add", help="Add dependency to node.toml")
     add.add_argument("package", help="Package Name (e.g. numpy)")
     add.add_argument("--node", help="Path to node folder (e.g. nodes/camera)")
 
     # ==========================
-    # 3. LOGS Command
+    # 4. LOGS Command
     # ==========================
     logs = subparsers.add_parser("logs", help="View node logs from K8s")
     logs.add_argument("node", help="Node Name (e.g. camera)")
     logs.add_argument("--namespace", "-n", default="edgeflow", help="K8s Namespace")
 
     # ==========================
-    # 4. UPGRADE Command
+    # 5. INIT Command
+    # ==========================
+    init_cmd = subparsers.add_parser("init", help="Initialize a new project")
+    init_cmd.add_argument("name", help="Project Name")
+
+    # ==========================
+    # 6. DOCTOR Command
+    # ==========================
+    subparsers.add_parser("doctor", help="Check environment health")
+
+    # ==========================
+    # 7. DASHBOARD Command
+    # ==========================
+    dash = subparsers.add_parser("dashboard", help="Open Gateway Dashboard")
+    dash.add_argument("--port", "-p", type=int, default=8000, help="Local port")
+    dash.add_argument("--namespace", "-n", default="edgeflow", help="K8s Namespace")
+
+    # ==========================
+    # 8. UPGRADE Command
     # ==========================
     subparsers.add_parser("upgrade", help="Upgrade EdgeFlow to latest version")
 
@@ -56,6 +77,12 @@ def main():
         add_dependency(args.package, args.node)
     elif args.command == "logs":
         show_logs(args.node, args.namespace)
+    elif args.command == "init":
+        init_project(args.name)
+    elif args.command == "doctor":
+        check_environment()
+    elif args.command == "dashboard":
+        open_dashboard(args.namespace, args.port)
     elif args.command == "upgrade":
         upgrade_framework()
     else:

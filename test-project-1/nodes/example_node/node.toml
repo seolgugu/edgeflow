@@ -1,0 +1,7 @@
+[node]
+name = "example_node"
+description = "An example node"
+
+[build]
+base = "python:3.10-slim"
+dependencies = []

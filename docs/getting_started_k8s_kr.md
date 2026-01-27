@@ -61,9 +61,23 @@ cd edgeflow/examples/my-robot
 
 ## 4. 클러스터 배포 (Deploy)
 
-EdgeFlow는 노드의 역할(Gateway)이나 하드웨어 요구사항(GPU, Camera)에 따라 파드를 적절한 노드에 배치하기 위해 **Kubernetes Node Label**을 사용합니다.
+EdgeFlow는 노드 이미지를 빌드하여 레지스트리에 푸시하고, 클러스터는 이 이미지를 풀(Pull)하여 실행합니다. 따라서 **이미지 푸시/풀을 위한 인증**이 필요할 수 있습니다.
 
-### 4-1. 노드 라벨링 (Node Labeling)
+### 4-1. Docker Registry 로그인
+
+사용하려는 레지스트리(Docker Hub, GHCR 등)에 로그인이 되어 있어야 이미지를 푸시할 수 있습니다.
+
+```bash
+# Docker Hub
+docker login
+
+# GHCR (GitHub Container Registry)
+echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
+```
+
+> **Private Registry 사용 시:** Kubernetes 클러스터가 이미지를 가져올 수 있도록 `ImagePullSecrets` 설정이 필요할 수 있습니다. (기본 네임스페이스에 `docker-registry` 타입의 시크릿 생성)
+
+### 4-2. 노드 라벨링 (Node Labeling)
 
 배포 전, 각 노드에 적절한 라벨을 붙여야 파드가 정상적으로 스케줄링됩니다. (단일 노드 클러스터라면 한 노드에 모두 붙이면 됩니다.)
 
@@ -80,7 +94,7 @@ kubectl label nodes <your-node-name> edgeflow.io/device=gpu
 
 > **Tip:** `<your-node-name>`은 `kubectl get nodes`로 확인할 수 있습니다.
 
-### 4-2. 배포 실행
+### 4-3. 배포 실행
 
 이제 `edgeflow deploy` 명령어로 클러스터에 배포합니다. `--registry` 옵션은 필수입니다.
 

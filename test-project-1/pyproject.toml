@@ -1,0 +1,12 @@
+[project]
+name = "test-project-1"
+version = "0.1.0"
+description = "EdgeFlow Project"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "edgeflow",
+]
+
+[tool.uv]
+dev-dependencies = []
