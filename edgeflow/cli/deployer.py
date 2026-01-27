@@ -41,7 +41,7 @@ def ensure_namespace(k8s_core, namespace: str):
 def ensure_infra_resource(k8s_apps, k8s_core, namespace: str, template_name: str):
     """Deploy infrastructure template (Redis etc.)"""
     tpl_path = os.path.join(os.path.dirname(__file__), 'templates', template_name)
-    with open(tpl_path) as f:
+    with open(tpl_path, encoding='utf-8') as f:
         manifests = list(yaml.safe_load_all(f.read()))
 
     for manifest in manifests:
@@ -103,13 +103,13 @@ def deploy_to_k8s(
     
     # Load templates
     tpl_dir = Path(__file__).parent / 'templates'
-    with open(tpl_dir / 'deployment.yaml.j2') as f:
+    with open(tpl_dir / 'deployment.yaml.j2', encoding='utf-8') as f:
         dep_template = Template(f.read())
     
     svc_tpl_path = tpl_dir / 'service.yaml.j2'
     has_svc_tpl = svc_tpl_path.exists()
     if has_svc_tpl:
-        with open(svc_tpl_path) as f:
+        with open(svc_tpl_path, encoding='utf-8') as f:
             svc_template = Template(f.read())
 
     # Build per-node images
@@ -178,47 +178,6 @@ def deploy_to_k8s(
     
     k8s_apps = client.AppsV1Api()
     k8s_core = client.CoreV1Api()
-    
-def cleanup_namespace(namespace: str = "default"):
-    """Delete all EdgeFlow deployments and services in namespace"""
-    try:
-        config.load_kube_config()
-    except Exception:
-        # Try k3s config location default
-        k3s_config = "/etc/rancher/k3s/k3s.yaml"
-        if os.path.exists(k3s_config):
-            config.load_kube_config(config_file=k3s_config)
-            
-    k8s_apps = client.AppsV1Api()
-    k8s_core = client.CoreV1Api()
-    
-    try:
-        k8s_core.read_namespace(name=namespace)
-    except client.exceptions.ApiException:
-        print(f"⚠️ Namespace '{namespace}' does not exist.")
-        return
-
-    print(f"🧹 Clearing existing resources in '{namespace}'...")
-    
-    # Delete All Deployments
-    deps = k8s_apps.list_namespaced_deployment(namespace)
-    for d in deps.items:
-        # Skip Redis infrastructure
-        if 'redis' in d.metadata.name:
-            continue
-        k8s_apps.delete_namespaced_deployment(name=d.metadata.name, namespace=namespace)
-        print(f"  - Deleted Deployment: {d.metadata.name}")
-        
-    # Delete All Services
-    svcs = k8s_core.list_namespaced_service(namespace)
-    for s in svcs.items:
-        if 'redis' in s.metadata.name or s.metadata.name == 'kubernetes':
-            continue
-        k8s_core.delete_namespaced_service(name=s.metadata.name, namespace=namespace)
-        print(f"  - Deleted Service: {s.metadata.name}")
-    
-    print("✅ Cleanup complete.")
-
 
     # Prepare namespace
     ensure_namespace(k8s_core, namespace)
@@ -303,3 +262,44 @@ def cleanup_namespace(namespace: str = "default"):
                     raise e
 
     print(f"✅ Deployment complete!")
+
+
+def cleanup_namespace(namespace: str = "default"):
+    """Delete all EdgeFlow deployments and services in namespace"""
+    try:
+        config.load_kube_config()
+    except Exception:
+        # Try k3s config location default
+        k3s_config = "/etc/rancher/k3s/k3s.yaml"
+        if os.path.exists(k3s_config):
+            config.load_kube_config(config_file=k3s_config)
+            
+    k8s_apps = client.AppsV1Api()
+    k8s_core = client.CoreV1Api()
+    
+    try:
+        k8s_core.read_namespace(name=namespace)
+    except client.exceptions.ApiException:
+        print(f"⚠️ Namespace '{namespace}' does not exist.")
+        return
+
+    print(f"🧹 Clearing existing resources in '{namespace}'...")
+    
+    # Delete All Deployments
+    deps = k8s_apps.list_namespaced_deployment(namespace)
+    for d in deps.items:
+        # Skip Redis infrastructure
+        if 'redis' in d.metadata.name:
+            continue
+        k8s_apps.delete_namespaced_deployment(name=d.metadata.name, namespace=namespace)
+        print(f"  - Deleted Deployment: {d.metadata.name}")
+        
+    # Delete All Services
+    svcs = k8s_core.list_namespaced_service(namespace)
+    for s in svcs.items:
+        if 'redis' in s.metadata.name or s.metadata.name == 'kubernetes':
+            continue
+        k8s_core.delete_namespaced_service(name=s.metadata.name, namespace=namespace)
+        print(f"  - Deleted Service: {s.metadata.name}")
+    
+    print("✅ Cleanup complete.")

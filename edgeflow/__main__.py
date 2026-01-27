@@ -28,18 +28,6 @@ def main():
 
     # ==========================
     # 2. ADD Command (Package)
-
-# ... inside _handle_deploy ...
-
-        deploy_to_k8s(
-            system=system,
-            registry=args.registry,
-            namespace=args.namespace,
-            build=args.build,
-            push=args.build,
-            dry_run=args.dry_run,
-            clean=args.clean
-        )
     # ==========================
     add = subparsers.add_parser("add", help="Add dependency to node.toml")
     add.add_argument("package", help="Package Name (e.g. numpy)")

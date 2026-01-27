@@ -80,11 +80,26 @@ Camera (30fps) ─┬─→ [Redis Stream] ─→ YOLO (GPU) ─→ [TCP] ─→
 ## 🛠 Installation
 
 ```bash
-# Using uv (Recommended)
-uv pip install git+https://github.com/witdory/edgeflow.git
+# 1. Install uv
+pip install uv
 
-# Using pip
-pip install git+https://github.com/witdory/edgeflow.git
+# 2. Install edgeflow CLI (Available globally)
+uv tool install git+https://github.com/seolgugu/edgeflow.git
+
+# 3. (Optional) For Development
+git clone https://github.com/seolgugu/edgeflow.git
+cd edgeflow
+uv sync
+```
+
+## 🖥 CLI Usage
+
+```bash
+# Verify installation
+edgeflow --help
+
+# Deploy to Kubernetes
+edgeflow deploy main.py --registry localhost:5000
 ```
 
 ---
