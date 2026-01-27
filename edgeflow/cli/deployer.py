@@ -16,7 +16,17 @@ from edgeflow.constants import (
     GATEWAY_TCP_PORT, GATEWAY_HTTP_PORT, 
     DATA_REDIS_HOST, DATA_REDIS_PORT
 )
+from edgeflow.qos import QoS
 from .builder import build_all_nodes
+
+
+class QoSEncoder(json.JSONEncoder):
+    """JSON Encoder for QoS Enum"""
+    def default(self, obj):
+        if isinstance(obj, QoS):
+            return obj.value
+        return super().default(obj)
+
 
 
 def ensure_namespace(k8s_core, namespace: str):
@@ -211,7 +221,7 @@ def deploy_to_k8s(
                 "GATEWAY_HOST": f"gateway-svc.{namespace}.svc.cluster.local",
                 "GATEWAY_TCP_PORT": str(GATEWAY_TCP_PORT),
                 "NODE_NAME": name,
-                "EDGEFLOW_WIRING": json.dumps(system._resolve_wiring_config(name))
+                "EDGEFLOW_WIRING": json.dumps(system._resolve_wiring_config(name), cls=QoSEncoder)
             }
         )
         manifest = yaml.safe_load(yaml_str)
