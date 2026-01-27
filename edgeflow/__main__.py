@@ -36,6 +36,7 @@ def main():
     # ==========================
     # 3. LOGS Command
     # ==========================
+    logs = subparsers.add_parser("logs", help="View node logs from K8s")
     logs.add_argument("node", help="Node Name (e.g. camera)")
     logs.add_argument("--namespace", "-n", default="edgeflow", help="K8s Namespace")
 
