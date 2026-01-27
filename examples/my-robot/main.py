@@ -1,36 +1,31 @@
-# examples/my-robot/main.py
+# examples/my-robot/main_multi.py
 """
-Edgeflow v0.2.0 Example - QoS-based Stream Architecture
+Multi-System Example - Realtime + Logging with QoS
 """
 
 from edgeflow import System, QoS, run
 from edgeflow.comms import DualRedisBroker
 
-# System 초기화 (broker 의존성 주입)
-sys = System("my-robot", broker=DualRedisBroker())
+# ============================================================
+# System 1: Realtime Pipeline (Redis)
+# ============================================================
+sys = System("realtime", broker=DualRedisBroker())
 
-# ============================================================
-# 노드 등록 (폴더 경로로 참조 - lazy loading)
-# ============================================================
 cam = sys.node("nodes/camera", device="camera", fps=30)
 gpu = sys.node("nodes/yolo", device="gpu", replicas=2)
 gw  = sys.node("nodes/gateway", node_port=30080)
 
-# ============================================================
-# 연결 (Link Wiring with QoS)
-# ============================================================
 sys.link(cam).to(gpu, qos=QoS.REALTIME).to(gw)  # GPU: 최신만 (실시간)
-sys.link(cam).to(gw)                             # Raw 영상 -> Gateway (TCP)
+sys.link(cam).to(gw)                             # Raw -> Gateway (TCP)
 
 # ============================================================
-# 실행
+# Run System
 # ============================================================
 if __name__ == "__main__":
-    print("🚧 Building Pipeline...")
+    print("🚧 Building Multi-System Pipeline...")
     print(f"\n✅ System Ready!")
-    print(f" - Health Check: http://<NODE-IP>:30080/health")
-    print(f" - Raw Camera : http://<NODE-IP>:30080/video/camera")
-    print(f" - AI Result  : http://<NODE-IP>:30080/video/yolo")
-    print("\n🚀 Starting EdgeFlow...")
+    print(f" - Realtime: camera -> yolo (QoS.REALTIME) -> gateway")
+    print("\n🚀 Starting EdgeFlow (Multi-System)...")
     
-    run(sys)
+    sys.run()
+    #run(sys) #if using multi Systems
