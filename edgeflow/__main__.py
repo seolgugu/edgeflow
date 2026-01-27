@@ -3,7 +3,7 @@ import argparse
 import sys
 from .cli.inspector import inspect_app
 from .cli.deployer import deploy_to_k8s, cleanup_namespace
-from .cli.manager import add_dependency, show_logs
+from .cli.manager import add_dependency, show_logs, upgrade_framework
 
 def main():
     parser = argparse.ArgumentParser(description="EdgeFlow CLI v0.2.0")
@@ -36,9 +36,13 @@ def main():
     # ==========================
     # 3. LOGS Command
     # ==========================
-    logs = subparsers.add_parser("logs", help="View node logs from K8s")
     logs.add_argument("node", help="Node Name (e.g. camera)")
     logs.add_argument("--namespace", "-n", default="edgeflow", help="K8s Namespace")
+
+    # ==========================
+    # 4. UPGRADE Command
+    # ==========================
+    subparsers.add_parser("upgrade", help="Upgrade EdgeFlow to latest version")
 
     args = parser.parse_args()
 
@@ -51,6 +55,8 @@ def main():
         add_dependency(args.package, args.node)
     elif args.command == "logs":
         show_logs(args.node, args.namespace)
+    elif args.command == "upgrade":
+        upgrade_framework()
     else:
         parser.print_help()
 

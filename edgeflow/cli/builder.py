@@ -31,10 +31,8 @@ RUN apt-get update && apt-get install -y \\
     libgl1 libglib2.0-0 \\
     && rm -rf /var/lib/apt/lists/*
 
-# Install edgeflow framework
-COPY edgeflow/ /app/edgeflow/
-COPY pyproject.toml setup.py /app/
-RUN uv pip install --system -e .
+# Install edgeflow framework from GitHub
+RUN uv pip install --system git+https://github.com/seolgugu/edgeflow.git
 
 # Copy ONLY this specific node folder (lightweight image)
 COPY {node_path}/ /app/{node_path}/

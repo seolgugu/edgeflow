@@ -258,6 +258,9 @@ def deploy_to_k8s(
                     time.sleep(1)
                     k8s_core.create_namespaced_service(namespace=namespace, body=svc_manifest)
                     print(f"  + [Svc] Re-created: http://<NODE-IP>:{gateway_node_port}")
+                elif e.status == 422:
+                    print(f"  ❌ [Svc] Port Conflict: {gateway_node_port} is already in use by another service.")
+                    print(f"     -> Change 'node_port' in {name}/node.toml or delete conflicting service.")
                 else:
                     raise e
 

@@ -96,3 +96,24 @@ def show_logs(node_name: str, namespace: str = "edgeflow", follow: bool = True):
         print("\n👋 Log stream stopped.")
     except FileNotFoundError:
         print("❌ Error: 'kubectl' not found. Please install Kubernetes CLI.")
+
+
+def upgrade_framework():
+    """
+    Upgrade EdgeFlow framework to the latest version using uv.
+    """
+    print("🔄 Updating EdgeFlow to the latest version...")
+    
+    # repo_url could be a constant, but hardcoding for now as per request
+    cmd = [
+        "uv", "tool", "install", "--force",
+        "git+https://github.com/seolgugu/edgeflow.git"
+    ]
+    
+    try:
+        subprocess.run(cmd, check=True)
+        print("✅ Upgrade complete! Try 'edgeflow --version'")
+    except subprocess.CalledProcessError:
+        print("❌ Update failed. Please check your internet connection or uv installation.")
+    except FileNotFoundError:
+        print("❌ Error: 'uv' not found. Please install uv first.")
