@@ -31,8 +31,8 @@ RUN apt-get update && apt-get install -y \\
     libgl1 libglib2.0-0 git \\
     && rm -rf /var/lib/apt/lists/*
 
-# Install edgeflow framework from GitHub
-RUN uv pip install --system git+https://github.com/seolgugu/edgeflow.git
+# Install edgeflow framework from GitHub (Cache-busted)
+RUN uv pip install --system "git+https://github.com/seolgugu/edgeflow.git"  # v=20260128-1
 
 # Copy ONLY this specific node folder (lightweight image)
 COPY {node_path}/ /app/{node_path}/
