@@ -1,0 +1,16 @@
+.venv
+venv
+env
+
+*.pt
+*.pth
+*.onnx
+
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+
+.git
+.gitignore
+README.md

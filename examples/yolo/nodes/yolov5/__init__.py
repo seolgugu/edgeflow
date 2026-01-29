@@ -7,14 +7,15 @@ import time
 import os
 import cv2
 import numpy as np
-import torch
 from edgeflow.nodes import ConsumerNode
 
 class YoloV5(ConsumerNode):
+
     """
     Real YOLOv5n Consumer Node
     """
     def setup(self):
+        import torch
         """Load YOLOv5 Model"""
         worker_id = self.name
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [INFO] Loading YOLOv5n model...")

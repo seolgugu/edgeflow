@@ -7,11 +7,13 @@ import time
 import os
 import cv2
 import numpy as np
-from picamera2 import Picamera2  # Will raise ImportError on Windows
 from edgeflow.nodes import ProducerNode
 
 class Camera(ProducerNode):
+    
+
     def setup(self):
+        from picamera2 import Picamera2  # Will raise ImportError on Windows
         self.hostname = os.getenv("HOSTNAME", "localhost")
         print(f"📸 [Camera] Initialized on host: {self.hostname}")
         
