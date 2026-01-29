@@ -221,7 +221,8 @@ def deploy_to_k8s(
                 "GATEWAY_HOST": f"gateway-svc.{namespace}.svc.cluster.local",
                 "GATEWAY_TCP_PORT": str(GATEWAY_TCP_PORT),
                 "NODE_NAME": name,
-                "EDGEFLOW_WIRING": json.dumps(system._resolve_wiring_config(name), cls=QoSEncoder)
+
+                "NODE_CONFIG": json.dumps(spec.config, cls=QoSEncoder)
             }
         )
         manifest = yaml.safe_load(yaml_str)

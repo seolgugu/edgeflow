@@ -19,13 +19,31 @@ class Linker:
 
     def to(self, target: NodeSpec, channel: str = None, qos: QoS = QoS.REALTIME) -> 'Linker':
         """Register a connection between nodes with QoS policy"""
-        self.system._links.append({
-            'source': self.source,
-            'target': target,
+        # 1. Output (Source -> Target)
+        if 'targets' not in self.source.config:
+            self.source.config['targets'] = []
+            
+        # Determine Protocol
+        protocol = 'redis'
+        if target.config.get('type') == 'gateway' or channel is not None:
+            protocol = 'tcp'
+
+        self.source.config['targets'].append({
+            'name': target.name,
+            'protocol': protocol,
             'channel': channel,
-            'qos': qos,  # [신규] 연결별 QoS 정책
-            'broker': self.system.broker
+            'qos': qos
         })
+        
+        # 2. Input (Target <- Source)
+        if 'sources' not in target.config:
+            target.config['sources'] = []
+            
+        target.config['sources'].append({
+            'name': self.source.name,
+            'qos': qos
+        })
+        
         return Linker(self.system, target)
 
 
@@ -40,8 +58,7 @@ class System:
         self.name = name
         self.broker = broker
         self.specs: Dict[str, NodeSpec] = {}
-        self._links = []  # Deferred connections
-        self._instances = {}  # Populated at run()
+        self.specs: Dict[str, NodeSpec] = {}
 
     def node(self, path: str, **kwargs) -> NodeSpec:
         """Register node by path (uses global registry for sharing)"""
@@ -58,60 +75,8 @@ class System:
         """Create connection builder for wiring nodes"""
         return Linker(self, source)
 
-    def _load_node_class(self, node_path: str):
-        """Dynamically load EdgeNode subclass from folder"""
-        # nodes/camera -> nodes.camera
-        module_path = node_path.replace("/", ".")
-        module = importlib.import_module(module_path)
-        
-        # Find EdgeNode subclass DEFINED in this module (not imported)
-        from .nodes import EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode
-        base_classes = {EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode}
-        
-        for name, obj in vars(module).items():
-            if isinstance(obj, type) and issubclass(obj, EdgeNode):
-                # Skip imported base classes
-                if obj in base_classes:
-                    continue
-                # Only return classes defined in THIS module
-                if obj.__module__ == module.__name__:
-                    return obj
-        
-        raise ImportError(f"No EdgeNode subclass found in {node_path}")
-
-    def _instantiate_nodes(self):
-        """Load and instantiate all registered nodes"""
-        for name, spec in self.specs.items():
-            cls = self._load_node_class(spec.path)
-            instance = cls(broker=self.broker, **spec.config)
-            instance.name = name
-            self._instances[name] = instance
-            print(f"📦 Loaded: {name} ({cls.__name__}, type={cls.node_type})")
-
-    def _wire_connections(self):
-        """Apply registered links to node instances"""
-        for link in self._links:
-            source = self._instances[link['source'].name]
-            target = self._instances[link['target'].name]
-            channel = link.get('channel')
-
-            # Gateway (TCP) connection
-            if getattr(target, 'input_protocol', 'redis') == 'tcp':
-                source_id = channel if channel else source.name
-                gw_host = settings.GATEWAY_HOST
-                gw_port = settings.GATEWAY_TCP_PORT
-                handler = TcpHandler(gw_host, gw_port, source_id)
-                source.output_handlers.append(handler)
-                print(f"🔗 [Direct] {source.name} ==(TCP)==> {target.name} (Channel: {source_id})")
-
-            # Redis connection
-            else:
-                topic = source.name  # [수정] 토픽 = source 이름만
-                target.input_topics.append({'topic': source.name, 'qos': link.get('qos', QoS.REALTIME)})
-                limit = getattr(source, 'queue_size', 1)
-                handler = RedisHandler(self.broker, topic, queue_size=limit)
-                source.output_handlers.append(handler)
-                print(f"🔗 [Stream] {source.name} --(QoS:{link.get('qos', QoS.REALTIME).name})--> {target.name}")
+    # Removed _load_node_class and _instantiate_nodes as they are no longer used.
+    # Node instantiation happens in separate processes via _run_node_process.
 
     def run(self):
         """
@@ -120,83 +85,8 @@ class System:
         """
         run(self)
 
-    def _resolve_wiring_config(self, node_name: str) -> Dict[str, Any]:
-        """Resolve wiring for a specific node into serializable config"""
-        outputs = []
-        inputs = []
-        
-        # Check links where I am the source
-        for link in self._links:
-            if link['source'].name == node_name:
-                target_name = link['target'].name
-                channel = link.get('channel')
-                
-                # Check target protocol (Need to peek at target class? Or assume Redis?)
-                # For lazy loading, we might need to assume Redis unless config says otherwise.
-                # In v0.2.0, protocol flows are implicit. We will default to Redis topic mapping.
-                
-                # TODO: Lazy protocol check. For now, we assume Redis unless channel is explicit (gateway)
-                # Ideally, we should check the target's class `input_protocol` but that requires loading class.
-                # We will Load class briefly to check protocol if needed, or rely on naming conventions.
-                
-                target_cls = self._load_node_class(link['target'].path)
-                protocol = getattr(target_cls, 'input_protocol', 'redis')
-                
-                outputs.append({
-                    'target': target_name,
-                    'protocol': protocol,
-                    'channel': channel,
-                    'queue_size': getattr(self._load_node_class(link['source'].path), 'queue_size', 1),
-                    'qos': link.get('qos', QoS.REALTIME)  # [신규] QoS 전달
-                })
-            
-            if link['target'].name == node_name:
-                source_name = link['source'].name
-                qos = link.get('qos', QoS.REALTIME)
-                inputs.append({'topic': source_name, 'qos': qos})  # [변경] 토픽=source, QoS 포함
-                
-        return {'outputs': outputs, 'inputs': inputs}
-
-    def _apply_wiring_for_node(self, node, broker):
-        """Apply wiring using an ACTIVE broker instance (Thread Mode / Single Node Mode)"""
-        # This is used for Distributed Mode where we have an object
-        wiring = self._resolve_wiring_config(node.name)
-        self._hydrate_node_handlers(node, broker, wiring)
-
     @staticmethod
-    def _hydrate_node_handlers(node, broker, wiring):
-        # Inputs (now includes QoS)
-        for inp in wiring['inputs']:
-            topic = inp['topic'] if isinstance(inp, dict) else inp
-            qos = inp.get('qos', QoS.REALTIME) if isinstance(inp, dict) else QoS.REALTIME
-            if topic not in [t['topic'] if isinstance(t, dict) else t for t in node.input_topics]:
-                node.input_topics.append({'topic': topic, 'qos': qos})
-                
-        # Outputs
-        redis_topics = set()
-        for out in wiring['outputs']:
-            if out['protocol'] == 'tcp':
-                # Gateway connection
-                source_id = out['channel'] if out['channel'] else node.name
-                gw_host = settings.GATEWAY_HOST
-                gw_port = settings.GATEWAY_TCP_PORT
-                handler = TcpHandler(gw_host, gw_port, source_id)
-                node.output_handlers.append(handler)
-                print(f"🔗 [Direct] {node.name} ==(TCP)==> {out['target']}")
-            else:
-                # Redis connection - topic is now just source name
-                topic = node.name
-                
-                # Deduplicate: Only add one RedisHandler per topic
-                if topic not in redis_topics:
-                    handler = RedisHandler(broker, topic, queue_size=out['queue_size'])
-                    node.output_handlers.append(handler)
-                    redis_topics.add(topic)
-                
-                print(f"🔗 [Stream] {node.name} --(QoS:{out.get('qos', 'REALTIME').name if hasattr(out.get('qos'), 'name') else 'REALTIME'})--> {out['target']}")
-
-    @staticmethod
-    def _run_node_process(name: str, path: str, node_config: Dict, broker_config: Dict, wiring_config: Dict):
+    def _run_node_process(name: str, path: str, node_config: Dict, broker_config: Dict):
         """Bootstrap function running in a separate process"""
         # 1. Re-establish Broker Connection using the serialization protocol
         # Dynamic import based on broker_config
@@ -233,13 +123,11 @@ class System:
             print(f"❌ [Process:{name}] No EdgeNode found in {path}", flush=True)
             return
 
+        # Config (including sources/targets) is passed via **node_config
         node = node_cls(broker=broker, **node_config)
         node.name = name
         
-        # 3. Wiring (Handlers)
-        System._hydrate_node_handlers(node, broker, wiring_config)
-        
-        # 4. Execute
+        # 3. Execute
         print(f"🚀 [Process:{name}] Starting execution loop...", flush=True)
         node.execute()
 
@@ -262,73 +150,19 @@ def run(*systems: System):
         for name, spec in s.specs.items():
             all_specs[name] = spec
     
-    # 2. Merge wiring from all systems
-    all_links = []
-    for s in systems:
-        all_links.extend(s._links)
-    
-    # 3. Build wiring config per node (from ALL systems)
-    def resolve_merged_wiring(node_name: str) -> Dict[str, Any]:
-        outputs = []
-        inputs = []
-        
-        for link in all_links:
-            if link['source'].name == node_name:
-                target_name = link['target'].name
-                channel = link.get('channel')
-                broker = link.get('broker')
-                
-                # Load target class to check protocol
-                target_spec = all_specs.get(target_name)
-                if not target_spec:
-                    continue
-                target_cls = systems[0]._load_node_class(target_spec.path)
-                protocol = getattr(target_cls, 'input_protocol', 'redis')
-                
-                # Get queue_size from source
-                source_spec = all_specs.get(node_name)
-                source_cls = systems[0]._load_node_class(source_spec.path)
-                queue_size = getattr(source_cls, 'queue_size', 1)
-                
-                outputs.append({
-                    'target': target_name,
-                    'protocol': protocol,
-                    'channel': channel,
-                    'queue_size': queue_size,
-                    'broker_config': broker.to_config() if broker else None
-                })
-            
-            if link['target'].name == node_name:
-                source_name = link['source'].name
-                qos = link.get('qos', QoS.REALTIME)
-                inputs.append({'topic': source_name, 'qos': qos})  # [수정] 토픽=source
-        
-        return {'outputs': outputs, 'inputs': inputs}
-    
-    # 4. Launch processes
+    # 2. Launch processes (Wiring is already in spec.config)
     processes = []
     
     # [Reset Broker State]
-    # Assuming all systems share the same physical broker for now,
-    # or separate brokers. We reset ALL brokers attached to systems.
-    # To avoid double reset if shared, we can track checked brokers, 
-    # but reset() is usually idempotent (FLUSHALL).
-    
-    # Simple strategy: Reset the broker of the first system (Master Broker)
-    # or iterate all unique brokers.
-    if processes == []:
-        # Only reset once at the beginning
-        if systems and hasattr(systems[0].broker, 'reset'):
-             systems[0].broker.reset()
+    if systems and hasattr(systems[0].broker, 'reset'):
+         systems[0].broker.reset()
 
     default_broker_config = systems[0].broker.to_config()
     
     for name, spec in all_specs.items():
-        wiring_config = resolve_merged_wiring(name)
-        
         p = multiprocessing.Process(
             target=System._run_node_process,
-            args=(name, spec.path, spec.config, default_broker_config, wiring_config),
+            args=(name, spec.path, spec.config, default_broker_config),
             daemon=True
         )
         p.start()

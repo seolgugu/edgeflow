@@ -23,7 +23,7 @@ class EdgeNode(ABC):
         self.running = True
         self.__dict__.update(kwargs)
         if not hasattr(self, 'name'):
-            self.name = self.__class__.__name__
+            self.name = os.getenv("NODE_NAME", self.__class__.__name__)
         self.hostname = os.getenv("HOSTNAME", "localhost")
         host = os.getenv("REDIS_HOST", "localhost")
         self.broker = broker
@@ -36,16 +36,22 @@ class EdgeNode(ABC):
         if not self.broker:
             self.broker = RedisBroker(host)
             
-        # K8s Wiring Injection
-        wiring_json = os.getenv("EDGEFLOW_WIRING")
-        if wiring_json:
+        if not self.broker:
+            self.broker = RedisBroker(host)
+            
+        # K8s Config Injection (includes Wiring)
+        node_config_json = os.getenv("NODE_CONFIG")
+        if node_config_json:
             import json
             try:
-                wiring_data = json.loads(wiring_json)
-                self._apply_wiring(wiring_data)
-                print(f"🔌 [Wiring] Applied configuration from Environment")
+                config_data = json.loads(node_config_json)
+                self.__dict__.update(config_data)
+                print(f"🔌 [Config] Injected from Environment")
             except Exception as e:
-                print(f"⚠️ Failed to apply wiring env: {e}")
+                print(f"⚠️ Failed to apply NODE_CONFIG: {e}")
+
+        # Apply wiring (from kwargs or injected config)
+        self._apply_wiring(self.__dict__)
 
     def send_result(self, frame):
         """연결된 모든 핸들러에게 데이터 전송"""
@@ -54,35 +60,41 @@ class EdgeNode(ABC):
         for handler in self.output_handlers:
             handler.send(frame)
 
-    def _apply_wiring(self, wiring):
-        """Apply wiring config from JSON (K8s Env Injection)"""
+    def _apply_wiring(self, config):
+        """Apply wiring from config (sources/targets)"""
         from ..handlers import RedisHandler, TcpHandler
         from ..qos import QoS
         from ..config import settings
         
-        # Inputs
-        for inp in wiring.get('inputs', []):
-            topic = inp['topic'] if isinstance(inp, dict) else inp
-            qos_val = inp.get('qos', QoS.REALTIME) if isinstance(inp, dict) else QoS.REALTIME
-            # QoS Enum restoration (if integer/string from JSON)
-            if isinstance(qos_val, int): qos_val = QoS(qos_val)
+        # Sources (Input)
+        # config['sources'] = [{'name': 'camera', 'qos': ...}]
+        for src in config.get('sources', []):
+            topic = src['name']
+            qos = src.get('qos', QoS.REALTIME)
+            if isinstance(qos, int): qos = QoS(qos)
             
-            self.input_topics.append({'topic': topic, 'qos': qos_val})
+            self.input_topics.append({'topic': topic, 'qos': qos})
                 
-        # Outputs
+        # Targets (Output)
+        # config['targets'] = [{'name': 'yolo', 'protocol': 'redis', ...}]
         redis_topics = set()
-        for out in wiring.get('outputs', []):
-            if out['protocol'] == 'tcp':
-                source_id = out['channel'] if out['channel'] else self.name
+        for tgt in config.get('targets', []):
+            protocol = tgt.get('protocol', 'redis')
+            target_name = tgt['name']
+            
+            if protocol == 'tcp':
+                source_id = tgt.get('channel') or self.name
                 gw_host = settings.GATEWAY_HOST
                 gw_port = settings.GATEWAY_TCP_PORT
                 handler = TcpHandler(gw_host, gw_port, source_id)
                 self.output_handlers.append(handler)
-                print(f"🔗 [Direct] {self.name} ==(TCP)==> {out['target']}")
+                print(f"🔗 [Direct] {self.name} ==(TCP)==> {target_name}")
             else:
-                topic = self.name
+                topic = self.name # Pub/Sub uses my name as topic
+                queue_size = tgt.get('queue_size', 1)
+                
                 if topic not in redis_topics:
-                    handler = RedisHandler(self.broker, topic, queue_size=out['queue_size'])
+                    handler = RedisHandler(self.broker, topic, queue_size=queue_size)
                     self.output_handlers.append(handler)
                     redis_topics.add(topic)
                 # print log...
