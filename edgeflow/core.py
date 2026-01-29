@@ -58,11 +58,35 @@ class System:
         self.name = name
         self.broker = broker
         self.specs: Dict[str, NodeSpec] = {}
-        self.specs: Dict[str, NodeSpec] = {}
+
+    @staticmethod
+    def _inspect_node_type(path: str) -> str:
+        """Inspect the node class to determine its type (without instantiating)"""
+        try:
+            module_path = path.replace("/", ".")
+            module = importlib.import_module(module_path)
+            
+            # Find EdgeNode subclass
+            from .nodes import EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode, SinkNode
+            base_classes = {EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode, SinkNode}
+            
+            for obj in vars(module).values():
+                if isinstance(obj, type) and issubclass(obj, EdgeNode):
+                    if obj in base_classes: continue
+                    if obj.__module__ == module.__name__:
+                        return getattr(obj, "node_type", "generic")
+        except Exception as e:
+            print(f"⚠️ Failed to inspect node type for {path}: {e}")
+        return "generic"
 
     def node(self, path: str, **kwargs) -> NodeSpec:
         """Register node by path (uses global registry for sharing)"""
         spec = NodeRegistry.get_or_create(path, **kwargs)
+        
+        # Auto-detect node type if not provided
+        if 'type' not in spec.config:
+            spec.config['type'] = self._inspect_node_type(path)
+            
         self.specs[spec.name] = spec
         return spec
 

@@ -88,7 +88,7 @@ class EdgeNode(ABC):
                 gw_port = settings.GATEWAY_TCP_PORT
                 handler = TcpHandler(gw_host, gw_port, source_id)
                 self.output_handlers.append(handler)
-                print(f"🔗 [Direct] {self.name} ==(TCP)==> {target_name}")
+                print(f"🔗 [Direct] {self.name} ==(TCP)==> {target_name} (ID: {source_id})")
             else:
                 topic = self.name # Pub/Sub uses my name as topic
                 queue_size = tgt.get('queue_size', 1)
