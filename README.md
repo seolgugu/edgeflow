@@ -101,6 +101,10 @@ edgeflow --help
 # Deploy to Kubernetes
 edgeflow deploy main.py --registry localhost:5000
 
+# Turbo Mode (Selective Deploy)
+# Rebuild & deploy only specific nodes
+edgeflow deploy main.py --target yolo
+
 # Upgrade Framework
 edgeflow upgrade
 ```

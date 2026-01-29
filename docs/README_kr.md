@@ -101,6 +101,10 @@ edgeflow --help
 # Kubernetes 배포
 edgeflow deploy main.py --registry localhost:5000
 
+# Turbo Mode (부분 배포)
+# 변경된 노드만 빠르게 재배포 (-t 옵션)
+edgeflow deploy main.py --target yolo
+
 # 프레임워크 업데이트
 edgeflow upgrade
 ```
@@ -118,15 +122,15 @@ sys.link(cam).to(gpu).to(gw)  # Camera → GPU → Gateway
 sys.link(cam).to(logger)       # Fan-out 분기
 ```
 
-### 2. Handler 추상화
+### 2. 스마트 배선 (Intelligent Wiring)
 
-통신 프로토콜을 자동 선택하여 사용자 코드에서 분리:
+통신 프로토콜을 자동 선택(TCP/Redis)하여 사용자 코드에서 분리합니다. Gateway는 자동으로 감지되어 TCP로 최적화됩니다:
 
 ```python
 class YoloProcessor(ConsumerNode):
     def loop(self, data):
         result = self.inference(data)
-        return result  # 프레임워크가 Redis/TCP 자동 처리
+        return result  # 프레임워크가 Redis(일반) / TCP(Gateway) 자동 처리
 ```
 
 ### 3. QoS 기반 소비
