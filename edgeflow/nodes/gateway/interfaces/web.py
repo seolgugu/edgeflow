@@ -18,6 +18,13 @@ class WebInterface(BaseInterface):
         self.lock = asyncio.Lock() # 동시성 제어
         self.broker = None
         self._custom_routes = []
+        
+        # [Placeholder]
+        import cv2
+        import numpy as np
+        self.cv2 = cv2
+        self.np = np
+        self.placeholder_img = None # Cache
 
         self.buffer_delay = buffer_delay
         self.buffers = defaultdict(lambda: TimeJitterBuffer(buffer_delay=self.buffer_delay))
@@ -135,8 +142,28 @@ class WebInterface(BaseInterface):
             return func
         return decorator
 
+    def _get_placeholder(self, message="NO SIGNAL"):
+        """Generate/Update placeholder image"""
+        if self.placeholder_img is None:
+            # Create 640x480 black image
+            img = self.np.zeros((480, 640, 3), dtype=self.np.uint8)
+            
+            # Draw Text
+            self.cv2.putText(img, message, (180, 240), 
+                        self.cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
+            self.cv2.putText(img, time.strftime("%H:%M:%S"), (240, 300), 
+                        self.cv2.FONT_HERSHEY_SIMPLEX, 1.0, (200, 200, 200), 2)
+            
+            # Encode
+            _, encoded = self.cv2.imencode('.jpg', img)
+            self.placeholder_img = encoded.tobytes()
+        return self.placeholder_img
+
     async def stream_generator(self, topic):
         print(f"🎬 [Stream] Started for topic: {topic}", flush=True)
+        last_data_time = time.time()
+        timeout_threshold = 2.0  # 2초간 데이터 없으면 No Signal
+        
         try:
             while True:
                 data = None
@@ -145,12 +172,21 @@ class WebInterface(BaseInterface):
                         data = self.buffers[topic].pop()
 
                 if data:
+                    last_data_time = time.time()
+                    self.placeholder_img = None # Reset cache on new data
                     yield (b'--frameboundary\r\n'
                            b'Content-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
                     wait_time = 0.001 if self.buffer_delay == 0.0 else 0.01
                     await asyncio.sleep(wait_time)
                 else:
-                    await asyncio.sleep(0.01)
+                    # Timeout Check
+                    if time.time() - last_data_time > timeout_threshold:
+                        placeholder = self._get_placeholder(f"NO SIGNAL ({topic})")
+                        yield (b'--frameboundary\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + placeholder + b'\r\n')
+                        await asyncio.sleep(0.5) # Throttle refresh rate
+                    else:
+                        await asyncio.sleep(0.01)
         except Exception as e:
             print(f"❌ [Stream] Error: {e}", flush=True)
         finally:
@@ -213,7 +249,8 @@ class WebInterface(BaseInterface):
                     
                     # 2. 브로드캐스팅
                     disconnected = []
-                    for ws in self._websockets:
+                    # Fix: RuntimeError "Set changed size during iteration" -> Use list copy
+                    for ws in list(self._websockets):
                         try:
                             await ws.send_json(stats)
                         except Exception:

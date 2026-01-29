@@ -36,6 +36,7 @@ def main():
     add = subparsers.add_parser("add", help="Add dependency to node.toml")
     add.add_argument("package", help="Package Name (e.g. numpy)")
     add.add_argument("--node", help="Path to node folder (e.g. nodes/camera)")
+    add.add_argument("--apt", action="store_true", help="Add as system package (apt)")
 
     # ==========================
     # 4. LOGS Command
@@ -67,6 +68,12 @@ def main():
     # ==========================
     subparsers.add_parser("upgrade", help="Upgrade EdgeFlow to latest version")
 
+    # ==========================
+    # 9. LOCAL Command (New)
+    # ==========================
+    local_cmd = subparsers.add_parser("local", help="Run locally with uv (multiprocess)")
+    local_cmd.add_argument("file", nargs="?", default="main.py", help="Path to main.py")
+
     args = parser.parse_args()
 
     # Dispatch Commands
@@ -75,7 +82,7 @@ def main():
     elif args.command == "clean":
         cleanup_namespace(args.namespace)
     elif args.command == "add":
-        add_dependency(args.package, args.node)
+        add_dependency(args.package, args.node, is_apt=args.apt)
     elif args.command == "logs":
         show_logs(args.node, args.namespace)
     elif args.command == "init":
@@ -86,6 +93,9 @@ def main():
         open_dashboard(args.namespace, args.port)
     elif args.command == "upgrade":
         upgrade_framework()
+    elif args.command == "local":
+        from .cli.runner import run_local
+        run_local(args.file)
     else:
         parser.print_help()
 

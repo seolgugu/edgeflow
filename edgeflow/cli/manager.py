@@ -13,50 +13,48 @@ from pathlib import Path
 # 1. Project Management (Add, Init)
 # ==========================================
 
-def add_dependency(package: str, node_path: str = None):
+def add_dependency(package: str, node_path: str = None, is_apt: bool = False):
     """
-    Add a python package to node.toml dependencies.
-    If node_path is None, try to find node.toml in current dir or ask user.
+    Add a package (python or apt) to node.toml.
     """
     target_file = None
     
     # 1. 경로 자동 추론
     if node_path:
-        # 명시적 경로 (예: "nodes/camera")
         path = Path(node_path)
         if path.is_file() and path.name == "node.toml":
             target_file = path
         elif path.is_dir():
             target_file = path / "node.toml"
     else:
-        # 현재 디렉토리
         cwd = Path.cwd()
         if (cwd / "node.toml").exists():
             target_file = cwd / "node.toml"
     
     if not target_file or not target_file.exists():
         print(f"❌ Error: Could not find node.toml in '{node_path or 'current directory'}'")
-        print("Usage: edgeflow add <package> --node nodes/camera")
         sys.exit(1)
 
     # 2. 파일 읽기
     content = target_file.read_text(encoding="utf-8")
     
-    # 3. 의존성 추가 (Regex 활용)
-    # dependencies = ["numpy", "opencv-python"] 패턴 찾기
-    dep_pattern = r'(dependencies\s*=\s*\[)(.*?)(\])'
+    # 3. 키 이름 결정 (dependencies vs system_packages)
+    key_name = "system_packages" if is_apt else "dependencies"
     
-    match = re.search(dep_pattern, content, re.DOTALL)
+    # 4. Regex로 키 찾기
+    # 예: dependencies = [...] 또는 system_packages = [...]
+    pattern = rf'({key_name}\s*=\s*\[)(.*?)(\])'
+    
+    match = re.search(pattern, content, re.DOTALL)
     if match:
         prefix, current_deps, suffix = match.groups()
         
-        # 이미 존재하는지 확인
+        # 중복 확인
         if f'"{package}"' in current_deps or f"'{package}'" in current_deps:
-            print(f"⚠️ Package '{package}' is already in {target_file}")
+            print(f"⚠️ Package '{package}' is already in {key_name}")
             return
 
-        # 리스트 끝에 추가
-        # 마지막 요소 뒤에 콤마가 있는지 확인하고 처리
+        # 추가
         clean_deps = current_deps.strip()
         new_dep = f', "{package}"' if clean_deps and not clean_deps.endswith(',') else f'"{package}"'
         if not clean_deps:
@@ -67,15 +65,35 @@ def add_dependency(package: str, node_path: str = None):
             f'{prefix}{current_deps}{new_dep}{suffix}'
         )
     else:
-        # dependencies 키가 없는 경우 [build] 섹션 아래 추가 필요
-        # (간단하게 구현하기 위해 이건 사용자가 직접 포맷을 맞췄다고 가정하거나, [build] 섹션을 찾아 추가)
-        print(f"❌ Error: 'dependencies = []' list not found in [build] section.")
-        print("Please ensure node.toml has a valid format.")
-        sys.exit(1)
+        # 키가 없으면 [build] 섹션 끝에 추가
+        if is_apt:
+            # [build] 섹션을 찾아 그 아래에 system_packages 추가
+            build_match = re.search(r'(\[build\]\s*)(.*?)(\n\[|\Z)', content, re.DOTALL)
+            if build_match:
+                # [build] 섹션이 있으면 그 안에 추가
+                new_entry = f'\nsystem_packages = ["{package}"]'
+                # [build] ... (내용) ... [다음섹션] -> [build] ... (내용) new_entry [다음섹션]
+                # 이게 복잡하므로 단순하게 dependencies 줄을 찾아서 그 뒤에 추가하는 게 안전
+                dep_match = re.search(r'(dependencies\s*=\s*\[.*?\])', content, re.DOTALL)
+                if dep_match:
+                    new_content = content.replace(
+                        dep_match.group(1),
+                        f'{dep_match.group(1)}\n{key_name} = ["{package}"]'
+                    )
+                else:
+                    # dependencies도 없으면 [build] 바로 뒤에
+                     new_content = content.replace("[build]", f'[build]\n{key_name} = ["{package}"]')
+            else:
+                print(f"❌ Error: [build] section not found.")
+                return
+        else:
+             print(f"❌ Error: '{key_name} = []' list not found.")
+             sys.exit(1)
 
-    # 4. 저장
+    # 5. 저장
     target_file.write_text(new_content, encoding="utf-8")
-    print(f"✅ Added '{package}' to {target_file}")
+    type_label = "System Package" if is_apt else "Python Package"
+    print(f"✅ Added {type_label} '{package}' to {target_file}")
 
 
 def init_project(project_name: str):

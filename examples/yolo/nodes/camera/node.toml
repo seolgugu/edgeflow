@@ -1,0 +1,4 @@
+[build]
+base = "python:3.10-slim"
+dependencies = ["opencv-python-headless", "numpy"]
+system_packages = ["python3-picamera2"]

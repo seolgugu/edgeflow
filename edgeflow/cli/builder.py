@@ -16,19 +16,25 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
     """
     base_image = build_config.get("base", "python:3.10-slim")
     dependencies = build_config.get("dependencies", [])
+    system_packages = build_config.get("system_packages", [])
     
     # Build uv pip install command
     pip_deps = " ".join(dependencies) if dependencies else ""
     uv_install = f"RUN uv pip install --system {pip_deps}" if pip_deps else ""
+    
+    # Always include basic libs + User defined libs
+    default_sys_pkgs = ["git", "libgl1", "libglib2.0-0"] # 기본 필수
+    all_sys_pkgs = list(set(default_sys_pkgs + system_packages))
+    apt_install_cmd = " ".join(all_sys_pkgs)
     
     dockerfile = f"""FROM {base_image}
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 WORKDIR /app
 
-# System dependencies for OpenCV etc. and Git for installation
+# System dependencies
 RUN apt-get update && apt-get install -y \\
-    libgl1 libglib2.0-0 git \\
+    {apt_install_cmd} \\
     && rm -rf /var/lib/apt/lists/*
 
 # Install edgeflow framework from GitHub (Cache-busted)

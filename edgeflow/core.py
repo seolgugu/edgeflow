@@ -128,28 +128,38 @@ class System:
         # or make _load_node_class static.
         # For simplicity, we'll re-implement import logic here or make _load static.
         
-        module_path = path.replace("/", ".")
-        module = importlib.import_module(module_path)
-        
-        # Find class
-        from .nodes import EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode, SinkNode
-        base_classes = {EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode, SinkNode}
-        
-        node_cls = None
-        for obj_name, obj in vars(module).items():
-            if isinstance(obj, type) and issubclass(obj, EdgeNode):
-                if obj in base_classes: continue
-                if obj.__module__ == module.__name__:
-                    node_cls = obj
-                    break
-        
-        if not node_cls:
-            print(f"❌ [Process:{name}] No EdgeNode found in {path}", flush=True)
-            return
+        # 2. Load Class & Instantiate
+        import os
+        os.environ["NODE_NAME"] = name
 
-        # Config (including sources/targets) is passed via **node_config
-        node = node_cls(broker=broker, **node_config)
-        node.name = name
+        try:
+            module_path = path.replace("/", ".")
+            module = importlib.import_module(module_path)
+            
+            # Find class
+            from .nodes import EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode, SinkNode
+            base_classes = {EdgeNode, ProducerNode, ConsumerNode, GatewayNode, FusionNode, SinkNode}
+            
+            node_cls = None
+            for obj_name, obj in vars(module).items():
+                if isinstance(obj, type) and issubclass(obj, EdgeNode):
+                    if obj in base_classes: continue
+                    if obj.__module__ == module.__name__:
+                        node_cls = obj
+                        break
+            
+            if not node_cls:
+                raise ImportError(f"No EdgeNode subclass found in {path}")
+                
+            node = node_cls(broker=broker, **node_config)
+            
+        except Exception as e:
+            print(f"⚠️ [Process:{name}] Failed to load node: {e}", flush=True)
+            print(f"🔄 [Process:{name}] Falling back to FrameworkErrorNode...", flush=True)
+            
+            # Fallback to FrameworkErrorNode
+            from .nodes.producer import FrameworkErrorNode
+            node = FrameworkErrorNode(broker=broker, error_msg=f"{type(e).__name__}: {e}", **node_config)
         
         # 3. Execute
         print(f"🚀 [Process:{name}] Starting execution loop...", flush=True)
