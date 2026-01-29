@@ -97,7 +97,8 @@ def deploy_to_k8s(
     namespace: str = "default",
     build: bool = True,
     push: bool = True,
-    dry_run: bool = False
+    dry_run: bool = False,
+    targets: List[str] = None
 ):
     """
     Deploy System to Kubernetes with per-node images.
@@ -132,7 +133,8 @@ def deploy_to_k8s(
             node_paths=node_paths,
             registry=registry,
             push=push,
-            dry_run=dry_run
+            dry_run=dry_run,
+            targets=targets
         )
     else:
         # Assume images already exist
@@ -200,6 +202,12 @@ def deploy_to_k8s(
 
     # Deploy each node
     for name, spec in system.specs.items():
+        # Filter if targets specified
+        if targets:
+            # Check if name (e.g. 'yolo') or path ('nodes/yolo') contains target string
+            if not any(t in name or t in spec.path for t in targets):
+                continue
+
         image_tag = images.get(spec.path, "unknown")
         
         # Detect gateway type (will be determined at load time in new architecture)

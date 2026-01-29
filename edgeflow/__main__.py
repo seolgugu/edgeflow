@@ -21,6 +21,7 @@ def main():
     deploy.add_argument("--namespace", default="edgeflow", help="K8s Namespace")
     deploy.add_argument("--dry-run", action="store_true", help="Only generate manifests, don't apply")
     deploy.add_argument("--no-build", action="store_false", dest="build", help="Skip building images")
+    deploy.add_argument("--target", "-t", action="append", dest="targets", help="Deploy specific node only")
     deploy.set_defaults(build=True)
 
     # ==========================
@@ -106,7 +107,8 @@ def _handle_deploy(args):
             namespace=args.namespace,
             build=args.build,
             push=args.build,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
+            targets=args.targets
         )
         
         if args.dry_run:

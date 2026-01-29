@@ -130,7 +130,8 @@ def build_all_nodes(
     node_paths: List[str],
     registry: str,
     push: bool = True,
-    dry_run: bool = False
+    dry_run: bool = False,
+    targets: List[str] = None
 ) -> Dict[str, str]:
     """
     Build Docker images for all nodes.
@@ -144,6 +145,12 @@ def build_all_nodes(
     print(f"🚀 Building {len(node_paths)} node images...")
     
     for node_path in node_paths:
+        # Filter if targets specified
+        if targets:
+            # Check if any target matches this node path (partial match allowed e.g. 'yolo' matches 'nodes/yolo')
+            if not any(t in node_path for t in targets):
+                continue
+
         try:
             image_tag = build_node_image(
                 project_root=project_root,
