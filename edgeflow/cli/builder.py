@@ -41,7 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # [Auto-Fix] Add Raspberry Pi Repo if picamera2 is requested
 RUN if echo "{apt_install_cmd}" | grep -q "picamera2"; then \
         echo "deb http://archive.raspberrypi.org/debian/ bookworm main" > /etc/apt/sources.list.d/raspi.list \
-        && wget -qO - https://archive.raspberrypi.org/debian/raspberrypi.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/raspberrypi.gpg; \
+        && apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 82B129927FA3303E; \
     fi
 
 RUN apt-get update && apt-get install -y \\
