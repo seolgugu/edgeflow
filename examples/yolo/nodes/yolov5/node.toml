@@ -1,5 +1,5 @@
 [build]
-base = "python:3.10-slim"
+base = "python:3.11-slim"
 dependencies = [
     "opencv-python-headless", 
     "numpy", 
@@ -11,7 +11,7 @@ dependencies = [
     "tqdm", 
     "psutil"
 ]
-system_packages = ["libgl1", "libglib2.0-0"]
+system_packages = ["libgl1", "libglib2.0-0", "libgomp1"]
 
 [runtime]
 gpu = false  # Prototype runs on CPU as per user code
