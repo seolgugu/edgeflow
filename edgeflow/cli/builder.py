@@ -60,7 +60,6 @@ def build_node_image(
     node_path: str,
     registry: str,
     project_name: str,
-    project_name: str,
     push: bool = True,
     dry_run: bool = False,
     platforms: str = None
@@ -148,7 +147,6 @@ def build_node_image(
 def build_all_nodes(
     project_root: Path,
     node_paths: List[str],
-    registry: str,
     registry: str,
     push: bool = True,
     dry_run: bool = False,

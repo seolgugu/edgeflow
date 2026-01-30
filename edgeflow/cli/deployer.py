@@ -98,8 +98,6 @@ def deploy_to_k8s(
     build: bool = True,
     push: bool = True,
     dry_run: bool = False,
-    push: bool = True,
-    dry_run: bool = False,
     targets: List[str] = None,
     platforms: str = None
 ):
