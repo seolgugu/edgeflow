@@ -33,6 +33,17 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 WORKDIR /app
 
 # System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# [Auto-Fix] Add Raspberry Pi Repo if picamera2 is requested
+RUN if echo "{apt_install_cmd}" | grep -q "picamera2"; then \
+        echo "deb http://archive.raspberrypi.org/debian/ bookworm main" > /etc/apt/sources.list.d/raspi.list \
+        && wget -qO - https://archive.raspberrypi.org/debian/raspberrypi.gpg.key | apt-key add -; \
+    fi
+
 RUN apt-get update && apt-get install -y \\
     {apt_install_cmd} \\
     && rm -rf /var/lib/apt/lists/*
