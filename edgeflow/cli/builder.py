@@ -33,7 +33,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 WORKDIR /app
 
 # System dependencies
-# System dependencies
 RUN apt-get update && apt-get install -y \\
     {apt_install_cmd} \\
     && rm -rf /var/lib/apt/lists/*
@@ -114,10 +113,18 @@ def build_node_image(
         temp_dockerfile = f.name
     
     try:
-        platform_arg = platforms if platforms else "linux/amd64,linux/arm64"
+        # Priority: CLI Argument > node.toml > Default
+        target_platforms = "linux/amd64,linux/arm64"
+        
+        if platforms:
+            target_platforms = platforms # CLI override
+        elif build_config.get("platforms"):
+            target_platforms = ",".join(build_config["platforms"]) # node.toml
+            print(f"  🎯 [Config] Using specific platforms: {target_platforms}")
+
         build_cmd = [
             "docker", "buildx", "build",
-            "--platform", platform_arg,
+            "--platform", target_platforms,
             "-f", temp_dockerfile,
             "-t", image_tag,
         ]

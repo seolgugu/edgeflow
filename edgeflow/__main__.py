@@ -5,7 +5,7 @@ from .cli.inspector import inspect_app
 from .cli.deployer import deploy_to_k8s, cleanup_namespace
 from .cli.manager import (
     add_dependency, show_logs, upgrade_framework, 
-    open_dashboard, init_project, check_environment
+    open_dashboard, init_project, check_environment, set_node_architecture
 )
 
 def main():
@@ -75,6 +75,18 @@ def main():
     local_cmd = subparsers.add_parser("local", help="Run locally with uv (multiprocess)")
     local_cmd.add_argument("file", nargs="?", default="main.py", help="Path to main.py")
 
+    # ==========================
+    # 10. SET-ARCH Command
+    # ==========================
+    VALID_ARCHS = ["linux/amd64", "linux/arm64", "linux/arm/v7"]
+    set_arch = subparsers.add_parser("set-arch", help="Set target architecture for a node")
+    set_arch.add_argument("node", help="Path to node folder (e.g. nodes/camera)")
+    set_arch.add_argument(
+        "arch", 
+        help=f"Target architecture. Choices: {VALID_ARCHS}",
+        choices=VALID_ARCHS
+    )
+
     args = parser.parse_args()
 
     # Dispatch Commands
@@ -97,6 +109,8 @@ def main():
     elif args.command == "local":
         from .cli.runner import run_local
         run_local(args.file)
+    elif args.command == "set-arch":
+        set_node_architecture(args.node, args.arch)
     else:
         parser.print_help()
 

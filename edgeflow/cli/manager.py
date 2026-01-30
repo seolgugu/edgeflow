@@ -96,6 +96,66 @@ def add_dependency(package: str, node_path: str = None, is_apt: bool = False):
     print(f"✅ Added {type_label} '{package}' to {target_file}")
 
 
+def set_node_architecture(node_path: str, arch: str):
+    """
+    Set build architecture for a node in node.toml.
+    """
+    # 1. 파일 찾기
+    path = Path(node_path)
+    if path.is_file() and path.name == "node.toml":
+        target_file = path
+    elif path.is_dir():
+        target_file = path / "node.toml"
+    else:
+        # try relative to cwd
+        target_file = Path.cwd() / "node.toml"
+        if not target_file.exists():
+            target_file = Path.cwd() / node_path / "node.toml"
+
+    if not target_file.exists():
+        print(f"❌ Error: Could not find node.toml in '{node_path}'")
+        return
+
+    # 2. 파일 읽기
+    content = target_file.read_text(encoding="utf-8")
+    
+    # 3. 플랫폼 설정
+    # platforms = ["linux/arm64"] 형태로 변환
+    new_platforms_str = f'platforms = ["{arch}"]'
+    
+    # 4. Regex로 기존 platforms 찾기
+    pattern = r'(platforms\s*=\s*\[.*?\])'
+    match = re.search(pattern, content, re.DOTALL)
+    
+    if match:
+        # 기존 값 교체
+        new_content = content.replace(match.group(1), new_platforms_str)
+        print(f"♻️ Updated architecture to {arch}")
+    else:
+        # 키가 없으면 [build] 섹션 끝에 추가
+        build_match = re.search(r'(\[build\]\s*)(.*?)(\n\[|\Z)', content, re.DOTALL)
+        if build_match:
+            # [build] 섹션 안에 추가
+            # dependencies 라인을 찾아서 그 뒤에 추가하는 게 안전
+            dep_match = re.search(r'(dependencies\s*=\s*\[.*?\])', content, re.DOTALL)
+            if dep_match:
+                new_content = content.replace(
+                    dep_match.group(1),
+                    f'{dep_match.group(1)}\n{new_platforms_str}'
+                )
+            else:
+                # dependencies가 없으면 [build] 바로 뒤에
+                new_content = content.replace("[build]", f'[build]\n{new_platforms_str}')
+            print(f"✅ Set architecture to {arch}")
+        else:
+            print(f"❌ Error: [build] section not found in node.toml")
+            return
+
+    # 5. 저장
+    target_file.write_text(new_content, encoding="utf-8")
+
+
+
 def init_project(project_name: str):
     """
     Initialize a new EdgeFlow project with directory structure and templates.

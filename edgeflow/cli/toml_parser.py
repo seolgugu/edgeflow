@@ -47,8 +47,12 @@ def get_build_config(node_path: Path) -> Dict[str, Any]:
     config = parse_node_toml(toml_file)
     
     # Flatten for easy access
+    # Flatten for easy access
+    build_section = config.get("build", {})
     return {
-        "base": config.get("build", {}).get("base", "python:3.10-slim"),
-        "dependencies": config.get("build", {}).get("dependencies", []),
+        "base": build_section.get("base", "python:3.10-slim"),
+        "dependencies": build_section.get("dependencies", []),
+        "system_packages": build_section.get("system_packages", []),
+        "platforms": build_section.get("platforms", []), # e.g. ["linux/arm64"]
         "gpu": config.get("runtime", {}).get("gpu", False)
     }
