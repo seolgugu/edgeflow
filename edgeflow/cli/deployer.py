@@ -98,7 +98,10 @@ def deploy_to_k8s(
     build: bool = True,
     push: bool = True,
     dry_run: bool = False,
-    targets: List[str] = None
+    push: bool = True,
+    dry_run: bool = False,
+    targets: List[str] = None,
+    platforms: str = None
 ):
     """
     Deploy System to Kubernetes with per-node images.
@@ -134,7 +137,8 @@ def deploy_to_k8s(
             registry=registry,
             push=push,
             dry_run=dry_run,
-            targets=targets
+            targets=targets,
+            platforms=platforms
         )
     else:
         # Assume images already exist

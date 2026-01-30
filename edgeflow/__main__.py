@@ -22,6 +22,7 @@ def main():
     deploy.add_argument("--dry-run", action="store_true", help="Only generate manifests, don't apply")
     deploy.add_argument("--no-build", action="store_false", dest="build", help="Skip building images")
     deploy.add_argument("--target", "-t", action="append", dest="targets", help="Deploy specific node only")
+    deploy.add_argument("--arch", default=None, help="Target architecture (e.g. linux/arm64). Default: linux/amd64,linux/arm64")
     deploy.set_defaults(build=True)
 
     # ==========================
@@ -118,7 +119,8 @@ def _handle_deploy(args):
             build=args.build,
             push=args.build,
             dry_run=args.dry_run,
-            targets=args.targets
+            targets=args.targets,
+            platforms=args.arch
         )
         
         if args.dry_run:

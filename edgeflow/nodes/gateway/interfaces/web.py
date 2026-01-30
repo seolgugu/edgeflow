@@ -16,15 +16,23 @@ class WebInterface(BaseInterface):
         self.latest_frame = None
         self.latest_meta = {}
         self.lock = asyncio.Lock() # 동시성 제어
-        self.broker = None
+        self.broker = None #dashboard에서 큐 상태 모니터링할때 필요
         self._custom_routes = []
         
-        # [Placeholder]
-        import cv2
-        import numpy as np
-        self.cv2 = cv2
-        self.np = np
-        self.placeholder_img = None # Cache
+        # [Error Handling] Load Static 'No Signal' Asset
+        self.placeholder_img = None 
+        try:
+            import os
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            asset_path = os.path.join(current_dir, "assets", "no_signal.jpg")
+            if os.path.exists(asset_path):
+                with open(asset_path, "rb") as f:
+                    self.placeholder_img = f.read()
+                print(f"✅ [WebInterface] Loaded static 'No Signal' image ({len(self.placeholder_img)} bytes)")
+            else:
+                print(f"⚠️ [WebInterface] Static asset not found: {asset_path}")
+        except Exception as e:
+            print(f"⚠️ [WebInterface] Failed to load static asset: {e}")
 
         self.buffer_delay = buffer_delay
         self.buffers = defaultdict(lambda: TimeJitterBuffer(buffer_delay=self.buffer_delay))
@@ -33,7 +41,7 @@ class WebInterface(BaseInterface):
         self.frame_counts = defaultdict(int)  # topic -> count
         self.fps_stats = {}  # topic -> fps (최근 계산값)
         self.last_fps_calc_time = time.time()
-
+        
         # [신규] WebSocket 클라이언트 관리
         self._websockets = set()
 
@@ -142,22 +150,6 @@ class WebInterface(BaseInterface):
             return func
         return decorator
 
-    def _get_placeholder(self, message="NO SIGNAL"):
-        """Generate/Update placeholder image"""
-        if self.placeholder_img is None:
-            # Create 640x480 black image
-            img = self.np.zeros((480, 640, 3), dtype=self.np.uint8)
-            
-            # Draw Text
-            self.cv2.putText(img, message, (180, 240), 
-                        self.cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
-            self.cv2.putText(img, time.strftime("%H:%M:%S"), (240, 300), 
-                        self.cv2.FONT_HERSHEY_SIMPLEX, 1.0, (200, 200, 200), 2)
-            
-            # Encode
-            _, encoded = self.cv2.imencode('.jpg', img)
-            self.placeholder_img = encoded.tobytes()
-        return self.placeholder_img
 
     async def stream_generator(self, topic):
         print(f"🎬 [Stream] Started for topic: {topic}", flush=True)
@@ -173,7 +165,6 @@ class WebInterface(BaseInterface):
 
                 if data:
                     last_data_time = time.time()
-                    self.placeholder_img = None # Reset cache on new data
                     yield (b'--frameboundary\r\n'
                            b'Content-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
                     wait_time = 0.001 if self.buffer_delay == 0.0 else 0.01
@@ -181,9 +172,10 @@ class WebInterface(BaseInterface):
                 else:
                     # Timeout Check
                     if time.time() - last_data_time > timeout_threshold:
-                        placeholder = self._get_placeholder(f"NO SIGNAL ({topic})")
-                        yield (b'--frameboundary\r\n'
-                               b'Content-Type: image/jpeg\r\n\r\n' + placeholder + b'\r\n')
+                        if self.placeholder_img:
+                            yield (b'--frameboundary\r\n'
+                                   b'Content-Type: image/jpeg\r\n\r\n' + self.placeholder_img + b'\r\n')
+                        
                         await asyncio.sleep(0.5) # Throttle refresh rate
                     else:
                         await asyncio.sleep(0.01)

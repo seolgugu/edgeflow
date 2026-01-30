@@ -33,9 +33,13 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 WORKDIR /app
 
 # System dependencies
+# System dependencies
 RUN apt-get update && apt-get install -y \\
     {apt_install_cmd} \\
     && rm -rf /var/lib/apt/lists/*
+
+# [Fix] Make apt-installed packages (like python3-picamera2) visible to /usr/local/bin/python
+ENV PYTHONPATH=$PYTHONPATH:/usr/lib/python3/dist-packages
 
 # Install edgeflow framework from GitHub (Cache-busted)
 RUN uv pip install --system "git+https://github.com/seolgugu/edgeflow.git"  # v=20260128-8
@@ -57,8 +61,10 @@ def build_node_image(
     node_path: str,
     registry: str,
     project_name: str,
+    project_name: str,
     push: bool = True,
-    dry_run: bool = False
+    dry_run: bool = False,
+    platforms: str = None
 ) -> str:
     """
     Build Docker image for a single node.
@@ -108,9 +114,10 @@ def build_node_image(
         temp_dockerfile = f.name
     
     try:
+        platform_arg = platforms if platforms else "linux/amd64,linux/arm64"
         build_cmd = [
             "docker", "buildx", "build",
-            "--platform", "linux/amd64,linux/arm64",
+            "--platform", platform_arg,
             "-f", temp_dockerfile,
             "-t", image_tag,
         ]
@@ -135,9 +142,11 @@ def build_all_nodes(
     project_root: Path,
     node_paths: List[str],
     registry: str,
+    registry: str,
     push: bool = True,
     dry_run: bool = False,
-    targets: List[str] = None
+    targets: List[str] = None,
+    platforms: str = None
 ) -> Dict[str, str]:
     """
     Build Docker images for all nodes.
@@ -149,6 +158,8 @@ def build_all_nodes(
     images = {}
     
     print(f"🚀 Building {len(node_paths)} node images...")
+    if platforms:
+        print(f"  Target Platforms: {platforms}")
     
     for node_path in node_paths:
         # Filter if targets specified
@@ -164,7 +175,8 @@ def build_all_nodes(
                 registry=registry,
                 project_name=project_name,
                 push=push,
-                dry_run=dry_run
+                dry_run=dry_run,
+                platforms=platforms
             )
             images[node_path] = image_tag
         except Exception as e:
