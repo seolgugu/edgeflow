@@ -2,7 +2,7 @@
 # 이 파일은 프레임워크가 배포될 때 함께 포함됩니다.
 
 [python_to_system]
-"torch" = ["libgomp1"]
+"torch" = ["libgomp1", "libopenblas0", "libatomic1"]
 "torchvision" = ["libgomp1"]
 "opencv-python" = ["libgl1", "libglib2.0-0"]
 "opencv-python-headless" = ["libgl1", "libglib2.0-0"]

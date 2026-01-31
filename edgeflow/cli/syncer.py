@@ -86,31 +86,37 @@ def sync_nodes(
         for pod in pods:
             print(f"  ⚡ Syncing {node_path} -> {pod}:{remote_dest}")
             
-            # kubectl cp requires src and dest.
-            # Warning: kubectl cp copies the folder itself if src is a folder.
-            # If we do `cp nodes/camera pod:/app/nodes/camera`, it might end up as `/app/nodes/camera/camera`
-            # Correct usage: `cp nodes/camera/. pod:/app/nodes/camera/`
-            
-            cmd = [
-                "kubectl", "cp",
-                f"{local_src}/.",
-                f"{namespace}/{pod}:{remote_dest}/"
-            ]
-            
             try:
-                subprocess.run(cmd, check=True, stderr=subprocess.PIPE)
+                # Sync each .py file individually using kubectl exec
+                for py_file in local_src.glob("*.py"):
+                    file_content = py_file.read_text(encoding="utf-8")
+                    remote_file = f"{remote_dest}/{py_file.name}"
+                    
+                    # Use kubectl exec with echo to write file content
+                    # Escape for shell
+                    escaped_content = file_content.replace("'", "'\"'\"'")
+                    
+                    write_cmd = [
+                        "kubectl", "exec", pod, "-n", namespace, "--",
+                        "sh", "-c", f"cat > {remote_file} << 'EOFMARKER'\n{file_content}\nEOFMARKER"
+                    ]
+                    
+                    result = subprocess.run(write_cmd, capture_output=True, text=True)
+                    if result.returncode != 0:
+                        print(f"     ⚠️ Failed to sync {py_file.name}: {result.stderr}")
+                    else:
+                        print(f"     ✓ {py_file.name}")
+                
                 synced_count += 1
                 
-                # 5. Trigger Reload (Send SIGHUP to PID 1)
-                # PID 1 is our Supervisor (run.py)
-                reload_cmd = ["kubectl", "exec", f"{namespace}/{pod}", "--", "kill", "-HUP", "1"]
-                subprocess.run(reload_cmd, check=True, stdout=subprocess.DEVNULL)
+                # Trigger Reload (Send SIGHUP to PID 1)
+                reload_cmd = ["kubectl", "exec", pod, "-n", namespace, "--", "kill", "-HUP", "1"]
+                subprocess.run(reload_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 
                 print(f"     ✅ Synced & Reloaded.")
-
                 
             except subprocess.CalledProcessError as e:
-                print(f"     ❌ Sync failed: {e.stderr.decode().strip()}")
+                print(f"     ❌ Sync failed: {e}")
 
     if synced_count > 0:
         print(f"\n✨ Synced to {synced_count} pods. Changes applied immediately (if auto-reload is on).")

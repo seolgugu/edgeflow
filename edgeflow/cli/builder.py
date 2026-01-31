@@ -71,7 +71,8 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
     apt_install_cmd = " ".join(sorted(list(all_sys_pkgs)))
 
     # Build commands
-    heavy_cmd = f"RUN uv pip install --system {' '.join(heavy_deps)}" if heavy_deps else None
+    # Note: Use pip instead of uv for torch on ARM64 (uv has compatibility issues)
+    heavy_cmd = f"RUN pip install --no-cache-dir --break-system-packages {' '.join(heavy_deps)}" if heavy_deps else None
     light_cmd = f"RUN uv pip install --system {' '.join(light_deps)}" if light_deps else None
 
 

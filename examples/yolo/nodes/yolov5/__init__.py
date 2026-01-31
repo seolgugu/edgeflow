@@ -17,6 +17,23 @@ class YoloV5(ConsumerNode):
     def setup(self):
         worker_id = self.name
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [DEBUG] Entering setup, importing libraries...", flush=True)
+        
+        # [DEBUG] Use subprocess to capture crash signals
+        import subprocess
+        import sys
+        result = subprocess.run(
+            [sys.executable, "-c", "import torch; print('torch OK'); from ultralytics import YOLO; print('ultralytics OK')"],
+            capture_output=True,
+            text=True
+        )
+        print(f"[DEBUG] Import test stdout: {result.stdout}", flush=True)
+        print(f"[DEBUG] Import test stderr: {result.stderr}", flush=True)
+        print(f"[DEBUG] Import test returncode: {result.returncode}", flush=True)
+        
+        if result.returncode != 0:
+            print(f"❌ Import test FAILED with code {result.returncode}", flush=True)
+            raise RuntimeError(f"Import failed: {result.stderr}")
+        
         try:
             import torch
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [DEBUG] torch imported.")
