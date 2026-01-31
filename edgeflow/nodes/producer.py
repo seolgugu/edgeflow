@@ -98,6 +98,23 @@ class ProducerNode(EdgeNode):
             print(f"⚠️ [Producer] Error generation failed: {ex}")
             return None
 
+    def _setup(self):
+        """[Internal] Override to handle setup failures gracefully"""
+        try:
+            super()._setup()
+        except Exception as e:
+            print(f"⚠️ [Producer] Setup failed: {e}")
+            print(f"⚠️ [Producer] Enabling FALLBACK MODE (Dynamic Swap)")
+            self._setup_error = str(e)
+            # Dynamic Method Swap: Replace 'loop' with fallback logic
+            self.loop = self._fallback_loop
+            self.fps = 1 # Reduce load
+
+    def _fallback_loop(self):
+        """Fallback loop used when setup fails"""
+        error_msg = getattr(self, '_setup_error', "Setup Failed")
+        return self._generate_error_frame(f"SETUP ERR: {error_msg}")
+
     def _run_loop(self):
         """[Internal] FPS에 맞춰 loop() 반복 호출"""
         print(f"🚀 Producer started (FPS: {self.fps})")
@@ -107,8 +124,9 @@ class ProducerNode(EdgeNode):
             raw_data = None
             
             try:
-                # 사용자 loop() 실행
+                # 사용자 loop() (또는 교체된 _fallback_loop) 실행
                 raw_data = self.loop()
+                
                 if raw_data is None:
                     # None 리턴은 '정상 종료' 의미로 해석 (혹은 에러로 처리할 수도 있음)
                     # 여기서는 그냥 break 처리하거나, 에러 프레임을 보낼 수도 있음.

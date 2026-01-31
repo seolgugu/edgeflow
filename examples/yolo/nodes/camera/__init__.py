@@ -13,10 +13,10 @@ class Camera(ProducerNode):
     
 
     def setup(self):
-        from picamera2 import Picamera2  # Will raise ImportError on Windows
         self.hostname = os.getenv("HOSTNAME", "localhost")
         print(f"📸 [Camera] Initialized on host: {self.hostname}")
         
+        from picamera2 import Picamera2
         # Initialize Picamera2 Directly
         self.picam = Picamera2()
         config = self.picam.create_preview_configuration()
