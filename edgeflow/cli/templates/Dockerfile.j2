@@ -1,0 +1,45 @@
+FROM {{ base_image }}
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+WORKDIR /app
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# [Auto-Fix] Add Raspberry Pi Repo if picamera2 is requested
+RUN if echo "{{ apt_install_cmd }}" | grep -q "picamera2"; then \
+        echo "deb http://archive.raspberrypi.org/debian/ bookworm main" > /etc/apt/sources.list.d/raspi.list \
+        && apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 82B129927FA3303E; \
+    fi
+
+RUN apt-get update && apt-get install -y \
+    {{ apt_install_cmd }} \
+    && rm -rf /var/lib/apt/lists/*
+
+# [Fix] Make apt-installed packages (like python3-picamera2) visible to /usr/local/bin/python
+ENV PYTHONPATH=$PYTHONPATH:/usr/lib/python3/dist-packages
+
+# Install edgeflow framework from GitHub (Cache-busted)
+RUN uv pip install --system "git+https://github.com/seolgugu/edgeflow.git"  # v=20260128-8
+
+# [Layer 1] Heavy Dependencies (Cached often)
+# Examples: torch, numpy, opencv
+{% if heavy_cmd %}
+{{ heavy_cmd }}
+{% endif %}
+
+# [Layer 2] Light Dependencies (Frequent changes)
+# Examples: requests, flask
+# Placed BEFORE source code copy to prevent code changes from invalidating this layer
+{% if light_cmd %}
+{{ light_cmd }}
+{% endif %}
+
+# Copy ONLY this specific node folder
+COPY {{ node_path }}/ /app/{{ node_path }}/
+
+# Default command
+CMD ["python", "-c", "print('Node ready')"]

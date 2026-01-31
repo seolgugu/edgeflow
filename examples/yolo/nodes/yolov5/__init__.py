@@ -16,14 +16,22 @@ class YoloV5(ConsumerNode):
     """
     def setup(self):
         import torch
+        from ultralytics import YOLO
+        
         """Load YOLOv5 Model"""
         worker_id = self.name
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [INFO] Loading YOLOv5n model...")
         
         try:
-            # 'ultralytics/yolov5' 저장소에서 'yolov5n'(Nano) 모델을 로드
-            self.model = torch.hub.load('ultralytics/yolov5', 'yolov5n', pretrained=True)
-            self.model.to('cpu') # User prototype uses CPU
+            # Load local model (packaged with the node)
+            model_path = os.path.join(os.path.dirname(__file__), "yolov5n.pt")
+            if not os.path.exists(model_path):
+                print(f"⚠️ Model file not found at {model_path}, attempting download/fallback...")
+                model_path = "yolov5n.pt" # Let ultralytics handle it
+
+            self.model = YOLO(model_path)
+            # self.model.to('cpu') # Ultralytics handles device automatically, respects 'device' arg if needed
+            
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [INFO] YOLOv5n model loaded successfully.")
         except Exception as e:
             import traceback
@@ -40,32 +48,28 @@ class YoloV5(ConsumerNode):
         timestamp_str = time.strftime("%Y-%m-%d %H:%M:%S")
 
         try:
-            # 1. Decode Image (EdgeFlow passes raw bytes or numpy depending on serialization)
-            # EdgeFlow `ConsumerNode` receives `frame.data`. Since `Frame` wraps bytes/objects...
-            # If the producer sends encoded JPEG bytes, we decode. If numpy, we use directly.
-            # Assuming producer sends numpy or encoded bytes.
-            # User prototype expects bytes decoding.
-            
+            # 1. Decode Image
             if isinstance(frame_data, bytes):
                  im_array = cv2.imdecode(np.frombuffer(frame_data, dtype=np.uint8), cv2.IMREAD_COLOR)
             else:
-                 im_array = frame_data # Assuming upstream sends numpy
+                 im_array = frame_data 
 
             if im_array is None:
                 return None
 
-            # 2. Inference (Resize to 320 as per prototype)
-            results = self.model(im_array, size=320)
+            # 2. Inference
+            # Ultralytics YOLO returns a list of result objects
+            results = self.model(im_array, imgsz=320, verbose=False)
 
             # 3. Render
-            # processed_frame_rgb = results.render()[0]
-            # processed_frame_bgr = cv2.cvtColor(processed_frame_rgb, cv2.COLOR_RGB2BGR)
+            # plot() returns a BGR numpy array of the annotated image
+            processed_frame_bgr = results[0].plot()
             
             # [Log] AI Processing Time
             total_time = time.time() - start_process_time
             # print(f"[{timestamp_str}] [{worker_id}] [COMPLETED] Inference Time: {total_time:.4f}s")
             
-            return results.render()[0]
+            return processed_frame_bgr
 
         except Exception as e:
             print(f"[{timestamp_str}] [{worker_id}] [ERROR] AI processing failed: {e}")

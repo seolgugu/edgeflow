@@ -9,7 +9,8 @@ dependencies = [
     "pandas", 
     "seaborn", 
     "tqdm", 
-    "psutil"
+    "psutil",
+    "ultralytics"
 ]
 system_packages = ["libgl1", "libglib2.0-0", "libgomp1"]
 

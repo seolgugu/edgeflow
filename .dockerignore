@@ -2,9 +2,9 @@
 venv
 env
 
-*.pt
-*.pth
-*.onnx
+# *.pt
+# *.pth
+# *.onnx
 
 __pycache__
 *.pyc

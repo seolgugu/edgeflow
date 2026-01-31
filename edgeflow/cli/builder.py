@@ -15,54 +15,54 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
     CRITICAL: Only copies the specific node folder, not the entire project.
     """
     base_image = build_config.get("base", "python:3.10-slim")
-    dependencies = build_config.get("dependencies", [])
-    system_packages = build_config.get("system_packages", [])
+    # [Optimization] Split dependencies into Heavy (Cached) vs Light (Frequent)
+    # This prevents re-downloading PyTorch just because we added 'requests'
+    known_heavy_libs = {
+        "torch", "torchvision", "torchaudio", 
+        "tensorflow", "keras", 
+        "numpy", "pandas", "scipy", "scikit-learn", 
+        "opencv-python", "opencv-python-headless",
+        "ultralytics", "pillow", "matplotlib"
+    }
     
-    # Build uv pip install command
-    pip_deps = " ".join(dependencies) if dependencies else ""
-    uv_install = f"RUN uv pip install --system {pip_deps}" if pip_deps else ""
+    heavy_deps = []
+    light_deps = []
     
+    for dep in dependencies:
+        # Check if dep starts with any heavy lib name (e.g. "numpy==1.21")
+        dep_name = dep.split("=")[0].split("<")[0].split(">")[0].strip()
+        if dep_name in known_heavy_libs:
+            heavy_deps.append(dep)
+        else:
+            light_deps.append(dep)
+            
+    # Build commands
+    heavy_cmd = f"RUN uv pip install --system {' '.join(heavy_deps)}" if heavy_deps else ""
+    light_cmd = f"RUN uv pip install --system {' '.join(light_deps)}" if light_deps else ""
+
+    # Build commands
+    heavy_cmd = f"RUN uv pip install --system {' '.join(heavy_deps)}" if heavy_deps else None
+    light_cmd = f"RUN uv pip install --system {' '.join(light_deps)}" if light_deps else None
+
     # Always include basic libs + User defined libs
     default_sys_pkgs = ["git", "libgl1", "libglib2.0-0"] # 기본 필수
     all_sys_pkgs = list(set(default_sys_pkgs + system_packages))
     apt_install_cmd = " ".join(all_sys_pkgs)
     
-    dockerfile = f"""FROM {base_image}
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+    # Load Template
+    from jinja2 import Environment, FileSystemLoader
+    template_dir = Path(__file__).parent / "templates"
+    env = Environment(loader=FileSystemLoader(str(template_dir)))
+    template = env.get_template("Dockerfile.j2")
+    
+    dockerfile = template.render(
+        base_image=base_image,
+        apt_install_cmd=apt_install_cmd,
+        node_path=node_path,
+        heavy_cmd=heavy_cmd,
+        light_cmd=light_cmd
+    )
 
-WORKDIR /app
-
-# System dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    gnupg \
-    && rm -rf /var/lib/apt/lists/*
-
-# [Auto-Fix] Add Raspberry Pi Repo if picamera2 is requested
-RUN if echo "{apt_install_cmd}" | grep -q "picamera2"; then \
-        echo "deb http://archive.raspberrypi.org/debian/ bookworm main" > /etc/apt/sources.list.d/raspi.list \
-        && apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 82B129927FA3303E; \
-    fi
-
-RUN apt-get update && apt-get install -y \\
-    {apt_install_cmd} \\
-    && rm -rf /var/lib/apt/lists/*
-
-# [Fix] Make apt-installed packages (like python3-picamera2) visible to /usr/local/bin/python
-ENV PYTHONPATH=$PYTHONPATH:/usr/lib/python3/dist-packages
-
-# Install edgeflow framework from GitHub (Cache-busted)
-RUN uv pip install --system "git+https://github.com/seolgugu/edgeflow.git"  # v=20260128-8
-
-# Copy ONLY this specific node folder (lightweight image)
-COPY {node_path}/ /app/{node_path}/
-
-# Install node-specific dependencies
-{uv_install}
-
-# Default command
-CMD ["python", "-c", "print('Node ready')"]
-"""
     return dockerfile
 
 
