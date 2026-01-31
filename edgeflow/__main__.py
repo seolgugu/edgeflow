@@ -157,6 +157,7 @@ def _handle_build(args):
 
 def _handle_deploy_only(args):
     system = _load_system(args.file)
+    project_root = Path(args.file).resolve().parent
     print(f"🚀 Deploying System (Manifests only): {system.name}")
     deploy_to_k8s(
         system=system,
@@ -165,11 +166,13 @@ def _handle_deploy_only(args):
         build=False, # Skip build
         push=False,
         dry_run=args.dry_run,
-        targets=args.targets
+        targets=args.targets,
+        project_root=project_root
     )
 
 def _handle_up(args):
     system = _load_system(args.file)
+    project_root = Path(args.file).resolve().parent
     print(f"🚀 UP: Building, Pushing, and Deploying {system.name}")
     
     # 1. Build & Push
@@ -177,7 +180,7 @@ def _handle_up(args):
     node_paths = [spec.path for spec in system.specs.values()]
     
     build_all_nodes(
-        project_root=Path.cwd(),
+        project_root=project_root,
         node_paths=node_paths,
         registry=args.registry,
         push=True, # Always push in UP mode
@@ -193,7 +196,8 @@ def _handle_up(args):
         build=False, # Already built
         push=False,
         dry_run=args.dry_run,
-        targets=args.targets
+        targets=args.targets,
+        project_root=project_root
     )
 
 def _handle_sync(args):
@@ -201,14 +205,16 @@ def _handle_sync(args):
     from pathlib import Path
     
     system = _load_system(args.file)
+    project_root = Path(args.file).resolve().parent
     node_paths = [spec.path for spec in system.specs.values()]
     
     sync_nodes(
-        project_root=Path.cwd(),
+        project_root=project_root,
         node_paths=node_paths,
         namespace=args.namespace,
         targets=args.targets
     )
+
 
 if __name__ == "__main__":
     main()

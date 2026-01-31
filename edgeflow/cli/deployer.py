@@ -99,7 +99,8 @@ def deploy_to_k8s(
     push: bool = True,
     dry_run: bool = False,
     targets: List[str] = None,
-    platforms: str = None
+    platforms: str = None,
+    project_root: Optional[Path] = None
 ):
     """
     Deploy System to Kubernetes with per-node images.
@@ -111,8 +112,11 @@ def deploy_to_k8s(
         build: Whether to build images before deploy
         push: Whether to push images to registry
         dry_run: If True, save manifests to .build/ instead of applying
+        project_root: Root directory of the project (for image naming)
     """
-    project_root = Path.cwd()
+    if project_root is None:
+        project_root = Path.cwd()
+
     
     # Load templates
     tpl_dir = Path(__file__).parent / 'templates'
