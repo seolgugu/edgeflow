@@ -48,8 +48,9 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
 
     # Always include basic libs + User defined libs
     default_sys_pkgs = ["git", "libgl1", "libglib2.0-0"] # 기본 필수
-    all_sys_pkgs = list(set(default_sys_pkgs + system_packages))
+    all_sys_pkgs = sorted(list(set(default_sys_pkgs + system_packages)))
     apt_install_cmd = " ".join(all_sys_pkgs)
+
     
     # Load Template
     from jinja2 import Environment, FileSystemLoader
