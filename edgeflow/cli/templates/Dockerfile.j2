@@ -29,7 +29,7 @@ ENV PYTHONPATH="/usr/lib/python3/dist-packages"
 {% endif %}
 
 # Install edgeflow framework from GitHub (Cache-busted)
-RUN uv pip install --system "git+https://github.com/witdory/edgeflow.git"  # v=20260201-1
+RUN uv pip install --system "git+https://github.com/seolgugu/edgeflow.git"  # v=20260201-1
 
 # [Layer 2] Light Dependencies (Frequent changes)
 # Examples: requests, flask
