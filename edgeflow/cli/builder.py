@@ -15,6 +15,8 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
     CRITICAL: Only copies the specific node folder, not the entire project.
     """
     base_image = build_config.get("base", "python:3.10-slim")
+    dependencies = build_config.get("dependencies", [])
+    system_packages = build_config.get("system_packages", [])
     # [Optimization] Split dependencies into Heavy (Cached) vs Light (Frequent)
     # This prevents re-downloading PyTorch just because we added 'requests'
     known_heavy_libs = {

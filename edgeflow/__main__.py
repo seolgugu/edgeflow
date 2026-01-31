@@ -147,7 +147,7 @@ def _handle_build(args):
     # If push command, args.push is already True
     
     build_all_nodes(
-        project_root=Path.cwd(),
+        project_root=Path(args.file).resolve().parent,
         node_paths=node_paths,
         registry=args.registry,
         push=args.push,
