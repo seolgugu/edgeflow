@@ -375,7 +375,7 @@ def upgrade_framework():
     # repo_url could be a constant, but hardcoding for now as per request
     cmd = [
         "uv", "tool", "install", "--force",
-        "git+https://github.com/seolgugu/edgeflow.git"
+        "git+https://github.com/witdory/edgeflow.git"
     ]
     
     try:
