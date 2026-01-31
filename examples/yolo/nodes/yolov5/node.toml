@@ -1,5 +1,5 @@
 [build]
-base = "python:3.11-slim"
+base = "python:3.11-slim-bookworm"
 dependencies = [
     "opencv-python-headless", 
     "numpy", 
@@ -12,7 +12,7 @@ dependencies = [
     "psutil",
     "ultralytics"
 ]
-system_packages = ["libgl1", "libglib2.0-0", "libgomp1"]
+system_packages = [] # 이제 프레임워크가 자동으로 의존성을 해결합니다.
 
 [runtime]
 gpu = false  # Prototype runs on CPU as per user code

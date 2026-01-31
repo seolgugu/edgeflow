@@ -38,23 +38,41 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
         else:
             light_deps.append(dep)
             
-    # Build commands
-    heavy_cmd = f"RUN uv pip install --system {' '.join(heavy_deps)}" if heavy_deps else ""
-    light_cmd = f"RUN uv pip install --system {' '.join(light_deps)}" if light_deps else ""
+    # [Fundamental Fix] Decoupled Dependency Mapping
+    # Load mapping from external TOML instead of hardcoding
+    data_path = Path(__file__).parent / "data" / "dependencies.toml"
+    mapping = {}
+    default_pkgs = ["git", "wget", "gnupg"]
+    
+    if data_path.exists():
+        try:
+            from .toml_parser import tomllib
+            with open(data_path, "rb") as f:
+                dep_data = tomllib.load(f)
+                mapping = dep_data.get("python_to_system", {})
+                default_pkgs = dep_data.get("default", {}).get("system_packages", default_pkgs)
+        except Exception as e:
+            print(f"⚠️ Warning: Failed to load dependency map: {e}")
+
+    # Initialize with defaults
+    all_sys_pkgs = set(default_pkgs)
+    
+    # 1. Add user-defined system packages from node.toml
+    for pkg in system_packages:
+        all_sys_pkgs.add(pkg)
+
+    # 2. Automatically inject system packages based on python dependencies
+    for dep in dependencies:
+        dep_name = dep.split("=")[0].split("<")[0].split(">")[0].strip().lower()
+        if dep_name in mapping:
+            for sys_pkg in mapping[dep_name]:
+                all_sys_pkgs.add(sys_pkg)
+
+    apt_install_cmd = " ".join(sorted(list(all_sys_pkgs)))
 
     # Build commands
     heavy_cmd = f"RUN uv pip install --system {' '.join(heavy_deps)}" if heavy_deps else None
     light_cmd = f"RUN uv pip install --system {' '.join(light_deps)}" if light_deps else None
-
-    # Always include basic libs + User defined libs
-    default_sys_pkgs = ["git", "libgl1", "libglib2.0-0"] # 기본 필수
-    
-    # [Auto-Fix] PyTorch on ARM64 needs OpenMP (libgomp1)
-    if any(lib in str(heavy_deps) for lib in ['torch', 'ultralytics']):
-        default_sys_pkgs.append("libgomp1")
-
-    all_sys_pkgs = sorted(list(set(default_sys_pkgs + system_packages)))
-    apt_install_cmd = " ".join(all_sys_pkgs)
 
 
     

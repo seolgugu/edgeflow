@@ -1,0 +1,13 @@
+# edgeflow/cli/data/dependencies.toml
+# 이 파일은 프레임워크가 배포될 때 함께 포함됩니다.
+
+[python_to_system]
+"torch" = ["libgomp1"]
+"torchvision" = ["libgomp1"]
+"opencv-python" = ["libgl1", "libglib2.0-0"]
+"opencv-python-headless" = ["libgl1", "libglib2.0-0"]
+"ultralytics" = ["libgomp1", "libgl1", "libglib2.0-0"]
+"pandas" = []
+
+[default]
+system_packages = ["git", "wget", "gnupg"]

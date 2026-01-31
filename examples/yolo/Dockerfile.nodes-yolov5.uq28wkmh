@@ -1,4 +1,4 @@
-FROM {{ base_image }}
+FROM python:3.11-slim-bookworm
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 WORKDIR /app
@@ -10,13 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # [Auto-Fix] Add Raspberry Pi Repo if picamera2 is requested
-RUN if echo "{{ apt_install_cmd }}" | grep -q "picamera2"; then \
+RUN if echo "git gnupg libgl1 libglib2.0-0 libgomp1 wget" | grep -q "picamera2"; then \
     echo "deb http://archive.raspberrypi.org/debian/ bookworm main" > /etc/apt/sources.list.d/raspi.list \
     && apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 82B129927FA3303E; \
     fi
 
 RUN apt-get update && apt-get install -y \
-    {{ apt_install_cmd }} \
+    git gnupg libgl1 libglib2.0-0 libgomp1 wget \
     && rm -rf /var/lib/apt/lists/*
 
 # [Fix] Make apt-installed packages (like python3-picamera2) visible to /usr/local/bin/python
@@ -24,9 +24,9 @@ ENV PYTHONPATH="/usr/lib/python3/dist-packages"
 
 # [Layer 1] Heavy Dependencies (Cached often)
 # Examples: torch, numpy, opencv
-{% if heavy_cmd %}
-{{ heavy_cmd }}
-{% endif %}
+
+RUN uv pip install --system opencv-python-headless numpy torch torchvision pandas ultralytics
+
 
 # Install edgeflow framework from GitHub (Cache-busted)
 RUN uv pip install --system "git+https://github.com/seolgugu/edgeflow.git"  # v=20260131-1
@@ -34,12 +34,12 @@ RUN uv pip install --system "git+https://github.com/seolgugu/edgeflow.git"  # v=
 # [Layer 2] Light Dependencies (Frequent changes)
 # Examples: requests, flask
 # Placed BEFORE source code copy to prevent code changes from invalidating this layer
-{% if light_cmd %}
-{{ light_cmd }}
-{% endif %}
+
+RUN uv pip install --system requests seaborn tqdm psutil
+
 
 # Copy ONLY this specific node folder
-COPY {{ node_path }}/ /app/{{ node_path }}/
+COPY nodes/yolov5/ /app/nodes/yolov5/
 
 # Default command
 CMD ["python", "-c", "print('Node ready')"]

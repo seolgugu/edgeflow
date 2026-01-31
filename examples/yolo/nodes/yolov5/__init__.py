@@ -15,11 +15,18 @@ class YoloV5(ConsumerNode):
     Real YOLOv5n Consumer Node
     """
     def setup(self):
-        import torch
-        from ultralytics import YOLO
+        worker_id = self.name
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [DEBUG] Entering setup, importing libraries...")
+        try:
+            import torch
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [DEBUG] torch imported.")
+            from ultralytics import YOLO
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [DEBUG] ultralytics imported.")
+        except Exception as e:
+             print(f"❌ Import failed: {e}")
+             raise e
         
         """Load YOLOv5 Model"""
-        worker_id = self.name
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [INFO] Loading YOLOv5n model...")
         
         try:
