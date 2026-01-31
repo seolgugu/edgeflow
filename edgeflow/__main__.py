@@ -50,7 +50,9 @@ def main():
     up_cmd.add_argument("--namespace", default="edgeflow", help="K8s Namespace")
     up_cmd.add_argument("--target", "-t", action="append", dest="targets", help="Target specific node only")
     up_cmd.add_argument("--arch", default=None, help="Target architecture")
+    up_cmd.add_argument("--push", action="store_true", default=True, help="Push after build (default: True)")
     up_cmd.add_argument("--dry-run", action="store_true", help="Only generate manifests")
+
 
     # [Other Commands same as before...]
     clean = subparsers.add_parser("clean", help="Clean up namespace resources")
