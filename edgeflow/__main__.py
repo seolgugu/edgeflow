@@ -1,6 +1,7 @@
 # edgeflow/__main__.py
 import argparse
 import sys
+from pathlib import Path
 from .cli.inspector import inspect_app
 from .cli.deployer import deploy_to_k8s, cleanup_namespace
 from .cli.manager import (
@@ -141,7 +142,6 @@ def _load_system(file_path):
 def _handle_build(args):
     system = _load_system(args.file)
     print(f"🔨 Building System: {system.name}")
-    from pathlib import Path
     
     node_paths = [spec.path for spec in system.specs.values()]
     
@@ -178,7 +178,6 @@ def _handle_up(args):
     print(f"🚀 UP: Building, Pushing, and Deploying {system.name}")
     
     # 1. Build & Push
-    from pathlib import Path
     node_paths = [spec.path for spec in system.specs.values()]
     
     build_all_nodes(
@@ -204,7 +203,6 @@ def _handle_up(args):
 
 def _handle_sync(args):
     from .cli.syncer import sync_nodes
-    from pathlib import Path
     
     system = _load_system(args.file)
     project_root = Path(args.file).resolve().parent
