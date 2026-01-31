@@ -108,7 +108,6 @@ class ProducerNode(EdgeNode):
             self._setup_error = str(e)
             # Dynamic Method Swap: Replace 'loop' with fallback logic
             self.loop = self._fallback_loop
-            self.fps = 1 # Reduce load
 
     def _fallback_loop(self):
         """Fallback loop used when setup fails"""
