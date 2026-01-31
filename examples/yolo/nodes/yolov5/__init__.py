@@ -16,14 +16,16 @@ class YoloV5(ConsumerNode):
     """
     def setup(self):
         worker_id = self.name
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [DEBUG] Entering setup, importing libraries...")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [DEBUG] Entering setup, importing libraries...", flush=True)
         try:
             import torch
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [DEBUG] torch imported.")
             from ultralytics import YOLO
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [{worker_id}] [DEBUG] ultralytics imported.")
-        except Exception as e:
-             print(f"❌ Import failed: {e}")
+        except BaseException as e:
+             print(f"❌ Import failed: {e}", flush=True)
+             import traceback
+             traceback.print_exc()
              raise e
         
         """Load YOLOv5 Model"""

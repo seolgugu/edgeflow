@@ -1,5 +1,5 @@
 [build]
-base = "python:3.11-slim-bookworm"
+base = "python:3.11-bookworm"
 dependencies = [
     "opencv-python-headless", 
     "numpy", 
