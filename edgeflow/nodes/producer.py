@@ -36,8 +36,8 @@ class ProducerNode(EdgeNode):
             import numpy as np
             import os
             
-            # 1. 기본 검은 배경 생성 (480x640)
-            height, width = 480, 640
+            # 1. 기본 검은 배경 생성 (320x240)
+            height, width = 240, 320
             img = np.zeros((height, width, 3), dtype=np.uint8)
             
             # ---------------------------------------------------------
