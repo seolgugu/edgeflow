@@ -60,12 +60,12 @@ class RedisListBroker(BrokerInterface):
             return
         self._ensure_connected()
         try:
-            # Push to right side of list
-            self._redis.rpush(topic, data)
-            
-            # Trim to maintain max size (keeps newest data)
+            # Use pipeline for atomic rpush+ltrim (reduces round-trips)
             limit = self._topic_limits.get(topic, self.maxlen)
-            self._redis.ltrim(topic, -limit, -1)
+            pipe = self._redis.pipeline()
+            pipe.rpush(topic, data)
+            pipe.ltrim(topic, -limit, -1)
+            pipe.execute()
         except Exception as e:
             print(f"Redis Push Error: {e}")
 
@@ -87,34 +87,19 @@ class RedisListBroker(BrokerInterface):
 
     def pop_latest(self, topic: str, timeout: int = 1, **kwargs) -> Optional[bytes]:
         """
-        [QoS: REALTIME] Get the latest message, skip old ones.
-        - Does NOT delete the list (allows DURABLE consumers to coexist)
-        - Uses frame_id tracking to skip already-processed messages
+        [QoS: REALTIME] Get the latest message.
+        - With list size=1 (set by REALTIME QoS), blpop effectively gets the latest
+        - Uses true blocking (no polling overhead)
         """
         self._ensure_connected()
         
         try:
-            # Initialize last seen ID for this topic
-            if topic not in self._last_seen_id:
-                self._last_seen_id[topic] = -1
-            
-            # Try non-blocking first
-            latest = self._redis.lrange(topic, -1, -1)
-            
-            if not latest:
-                # Wait with BLPOP if no data (but this removes item!)
-                # Instead, poll with short sleeps
-                start = time.time()
-                while time.time() - start < timeout:
-                    latest = self._redis.lrange(topic, -1, -1)
-                    if latest:
-                        break
-                    time.sleep(0.01)  # 10ms poll interval
-            
-            if not latest:
-                return None
-            
-            return latest[0]
+            # BLPOP: True blocking, no CPU waste
+            # With REALTIME QoS, list size is 1, so this always gets the latest
+            result = self._redis.blpop([topic], timeout=timeout)
+            if result:
+                return result[1]
+            return None
             
         except Exception as e:
             print(f"Redis PopLatest Error: {e}")

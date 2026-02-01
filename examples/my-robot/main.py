@@ -9,7 +9,7 @@ from edgeflow.comms import RedisListBroker  # List-based broker for better perfo
 # ============================================================
 # System 1: Realtime Pipeline (Redis)
 # ============================================================
-sys = System("realtime", broker=DualRedisListBroker())
+sys = System("realtime", broker=RedisListBroker())
 
 cam = sys.node("nodes/camera", device="camera", fps=30)
 gpu = sys.node("nodes/yolo", device="gpu", replicas=2)

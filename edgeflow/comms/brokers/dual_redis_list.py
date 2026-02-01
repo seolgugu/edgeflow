@@ -172,34 +172,21 @@ class DualRedisListBroker(BrokerInterface):
 
     def pop_latest(self, topic: str, timeout: int = 1, **kwargs) -> Optional[bytes]:
         """
-        [QoS: REALTIME] Get the latest message, skip old ones.
-        - Does NOT delete the list (allows DURABLE consumers to coexist)
-        - Uses polling with LRANGE to get latest
+        [QoS: REALTIME] Get the latest message.
+        - With list size=1 (set by REALTIME QoS), blpop effectively gets the latest
+        - Uses true blocking (no polling overhead)
         """
         self._ensure_connected()
         
         try:
-            # Initialize last seen ID for this topic
-            if topic not in self._last_seen_id:
-                self._last_seen_id[topic] = -1
-            
-            # Try non-blocking first
-            latest = self.ctrl_redis.lrange(topic, -1, -1)
-            
-            if not latest:
-                # Poll with short sleeps instead of destructive BLPOP
-                start = time.time()
-                while time.time() - start < timeout:
-                    latest = self.ctrl_redis.lrange(topic, -1, -1)
-                    if latest:
-                        break
-                    time.sleep(0.01)  # 10ms poll interval
-            
-            if not latest:
+            # BLPOP: True blocking, no CPU waste
+            # With REALTIME QoS, list size is 1, so this always gets the latest
+            result = self.ctrl_redis.blpop([topic], timeout=timeout)
+            if not result:
                 return None
             
             # Decode frame_id
-            frame_id = latest[0].decode('utf-8') if isinstance(latest[0], bytes) else latest[0]
+            frame_id = result[1].decode('utf-8') if isinstance(result[1], bytes) else result[1]
             
             # Fetch actual data from Data Redis
             data_key = f"{topic}:data:{frame_id}"

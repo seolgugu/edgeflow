@@ -2,10 +2,10 @@ import asyncio
 import time
 import uvicorn
 import traceback
+from collections import defaultdict, deque
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 from .base import BaseInterface
-from collections import defaultdict
 from ....comms import Frame
 from ....utils.buffer import TimeJitterBuffer
 
@@ -37,11 +37,11 @@ class WebInterface(BaseInterface):
         self.buffer_delay = buffer_delay
         self.buffers = defaultdict(lambda: TimeJitterBuffer(buffer_delay=self.buffer_delay))
 
-        # [신규] FPS 추적용 변수
-        self.frame_counts = defaultdict(int)  # topic -> count
-        self.worker_frame_counts = defaultdict(lambda: defaultdict(int))  # topic -> worker_id -> count
+        # [신규] FPS 추적용 변수 (이동평균 방식)
+        self.frame_timestamps = defaultdict(deque)  # topic -> deque of timestamps
+        self.worker_timestamps = defaultdict(lambda: defaultdict(deque))  # topic -> worker_id -> deque
         self.fps_stats = {}  # topic -> {"total": fps, "workers": {}}
-        self.last_fps_calc_time = time.time()
+        self.fps_window = 1.0  # 1초 윈도우로 FPS 계산
         
         # [신규] WebSocket 클라이언트 관리
         self._websockets = set()
@@ -134,12 +134,15 @@ class WebInterface(BaseInterface):
                  print(f"🌟 [WebInterface] New Topic Detected: {topic}", flush=True)
 
             self.buffers[topic].push(frame)
-            self.frame_counts[topic] += 1  # [신규] FPS 카운트
             
-            # [신규] Worker FPS 카운트 (topic 하위에 그룹화)
+            # [이동평균] 현재 타임스탬프 기록
+            now = time.time()
+            self.frame_timestamps[topic].append(now)
+            
+            # [이동평균] Worker별 타임스탬프 기록
             worker_id = frame.meta.get('worker_id')
             if worker_id:
-                self.worker_frame_counts[topic][worker_id] += 1
+                self.worker_timestamps[topic][worker_id].append(now)
 
             if frame.meta:
                 if topic not in self.latest_meta:
@@ -199,33 +202,8 @@ class WebInterface(BaseInterface):
 
     # [신규] FPS 계산 및 API
     async def get_fps(self):
+        """Return cached FPS stats (calculated by _calculate_fps every 1 second)"""
         async with self.lock:
-            now = time.time()
-            elapsed = now - self.last_fps_calc_time
-            if elapsed > 0:
-                result = {}
-                
-                # Topic FPS with nested workers
-                for topic, count in self.frame_counts.items():
-                    total_fps = round(count / elapsed, 2)
-                    workers_fps = {}
-                    
-                    # Calculate worker FPS under this topic
-                    if topic in self.worker_frame_counts:
-                        for worker_id, worker_count in self.worker_frame_counts[topic].items():
-                            workers_fps[worker_id] = round(worker_count / elapsed, 2)
-                    
-                    result[topic] = {
-                        "total": total_fps,
-                        "workers": workers_fps
-                    }
-                
-                # Reset counters
-                self.frame_counts = defaultdict(int)
-                self.worker_frame_counts = defaultdict(lambda: defaultdict(int))
-                self.last_fps_calc_time = now
-                self.fps_stats = result
-                
             return JSONResponse(content=self.fps_stats)
 
     # [신규] Dashboard HTML 페이지
@@ -315,37 +293,34 @@ class WebInterface(BaseInterface):
             return {}
 
     async def _calculate_fps(self):
+        """이동평균 방식 FPS 계산 (0.1초마다 호출, 1초 윈도우)"""
         async with self.lock:
             now = time.time()
-            elapsed = now - self.last_fps_calc_time
+            cutoff = now - self.fps_window  # 1초 전 시점
+            result = {}
             
-            # [Fix] FPS 계산 전이라도 토픽 목록 확보 (비디오 카드 생성을 위해)
-            for topic in self.buffers.keys():
-                if topic not in self.fps_stats:
-                    self.fps_stats[topic] = {"total": 0.0, "workers": {}}
-
-            if elapsed >= 1.0:
-                result = {}
+            # 모든 토픽에 대해 FPS 계산
+            for topic in list(self.buffers.keys()):
+                # 오래된 타임스탬프 제거 (1초 이전)
+                timestamps = self.frame_timestamps[topic]
+                while timestamps and timestamps[0] < cutoff:
+                    timestamps.popleft()
                 
-                # Topic FPS with nested workers
-                for topic, count in self.frame_counts.items():
-                    total_fps = round(count / elapsed, 2)
-                    workers_fps = {}
-                    
-                    # Calculate worker FPS under this topic
-                    if topic in self.worker_frame_counts:
-                        for worker_id, worker_count in self.worker_frame_counts[topic].items():
-                            workers_fps[worker_id] = round(worker_count / elapsed, 2)
-                    
-                    result[topic] = {
-                        "total": total_fps,
-                        "workers": workers_fps
-                    }
+                # FPS = 1초 윈도우 내 프레임 수
+                total_fps = round(len(timestamps), 2)
                 
-                # Reset counters
-                self.frame_counts = defaultdict(int)
-                self.worker_frame_counts = defaultdict(lambda: defaultdict(int))
-                self.last_fps_calc_time = now
-                self.fps_stats = result
+                # Worker별 FPS 계산
+                workers_fps = {}
+                if topic in self.worker_timestamps:
+                    for worker_id, worker_ts in self.worker_timestamps[topic].items():
+                        while worker_ts and worker_ts[0] < cutoff:
+                            worker_ts.popleft()
+                        workers_fps[worker_id] = round(len(worker_ts), 2)
+                
+                result[topic] = {
+                    "total": total_fps,
+                    "workers": workers_fps
+                }
             
+            self.fps_stats = result
             return self.fps_stats
