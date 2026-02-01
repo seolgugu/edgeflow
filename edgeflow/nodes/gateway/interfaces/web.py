@@ -39,9 +39,8 @@ class WebInterface(BaseInterface):
 
         # [신규] FPS 추적용 변수
         self.frame_counts = defaultdict(int)  # topic -> count
-        self.worker_frame_counts = defaultdict(int)  # worker_id -> count
-        self.fps_stats = {}  # topic -> fps (최근 계산값)
-        self.worker_fps_stats = {}  # worker_id -> fps
+        self.worker_frame_counts = defaultdict(lambda: defaultdict(int))  # topic -> worker_id -> count
+        self.fps_stats = {}  # topic -> {"total": fps, "workers": {}}
         self.last_fps_calc_time = time.time()
         
         # [신규] WebSocket 클라이언트 관리
@@ -137,10 +136,10 @@ class WebInterface(BaseInterface):
             self.buffers[topic].push(frame)
             self.frame_counts[topic] += 1  # [신규] FPS 카운트
             
-            # [신규] Worker FPS 카운트
+            # [신규] Worker FPS 카운트 (topic 하위에 그룹화)
             worker_id = frame.meta.get('worker_id')
             if worker_id:
-                self.worker_frame_counts[worker_id] += 1
+                self.worker_frame_counts[topic][worker_id] += 1
 
             if frame.meta:
                 if topic not in self.latest_meta:
@@ -204,21 +203,30 @@ class WebInterface(BaseInterface):
             now = time.time()
             elapsed = now - self.last_fps_calc_time
             if elapsed > 0:
-                # Topic FPS
+                result = {}
+                
+                # Topic FPS with nested workers
                 for topic, count in self.frame_counts.items():
-                    self.fps_stats[topic] = round(count / elapsed, 2)
+                    total_fps = round(count / elapsed, 2)
+                    workers_fps = {}
+                    
+                    # Calculate worker FPS under this topic
+                    if topic in self.worker_frame_counts:
+                        for worker_id, worker_count in self.worker_frame_counts[topic].items():
+                            workers_fps[worker_id] = round(worker_count / elapsed, 2)
+                    
+                    result[topic] = {
+                        "total": total_fps,
+                        "workers": workers_fps
+                    }
+                
+                # Reset counters
                 self.frame_counts = defaultdict(int)
-                
-                # Worker FPS
-                for worker_id, count in self.worker_frame_counts.items():
-                    self.worker_fps_stats[worker_id] = round(count / elapsed, 2)
-                self.worker_frame_counts = defaultdict(int)
-                
+                self.worker_frame_counts = defaultdict(lambda: defaultdict(int))
                 self.last_fps_calc_time = now
-            return JSONResponse(content={
-                "topics": self.fps_stats,
-                "workers": self.worker_fps_stats
-            })
+                self.fps_stats = result
+                
+            return JSONResponse(content=self.fps_stats)
 
     # [신규] Dashboard HTML 페이지
     async def dashboard(self):
@@ -314,11 +322,30 @@ class WebInterface(BaseInterface):
             # [Fix] FPS 계산 전이라도 토픽 목록 확보 (비디오 카드 생성을 위해)
             for topic in self.buffers.keys():
                 if topic not in self.fps_stats:
-                    self.fps_stats[topic] = 0.0
+                    self.fps_stats[topic] = {"total": 0.0, "workers": {}}
 
             if elapsed >= 1.0:
+                result = {}
+                
+                # Topic FPS with nested workers
                 for topic, count in self.frame_counts.items():
-                    self.fps_stats[topic] = round(count / elapsed, 2)
+                    total_fps = round(count / elapsed, 2)
+                    workers_fps = {}
+                    
+                    # Calculate worker FPS under this topic
+                    if topic in self.worker_frame_counts:
+                        for worker_id, worker_count in self.worker_frame_counts[topic].items():
+                            workers_fps[worker_id] = round(worker_count / elapsed, 2)
+                    
+                    result[topic] = {
+                        "total": total_fps,
+                        "workers": workers_fps
+                    }
+                
+                # Reset counters
                 self.frame_counts = defaultdict(int)
+                self.worker_frame_counts = defaultdict(lambda: defaultdict(int))
                 self.last_fps_calc_time = now
+                self.fps_stats = result
+            
             return self.fps_stats

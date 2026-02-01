@@ -309,18 +309,21 @@
         function updateDashboard(data) {
             if (!data) return;
 
-            // 1. Update FPS (handle new nested format)
+            // 1. Update FPS (new hierarchical format: {topic: {total, workers}})
             const fpsData = data.fps || {};
-            const topicsFps = fpsData.topics || fpsData; // Fallback for old format
-            const workersFps = fpsData.workers || {};
 
             // Display full FPS JSON including workers
             document.getElementById('fps-json').textContent = JSON.stringify(fpsData, null, 2);
 
             // Update topic-level FPS on cards
-            for (const [topic, fps] of Object.entries(topicsFps)) {
+            for (const [topic, topicData] of Object.entries(fpsData)) {
+                // Handle both old format (number) and new format ({total, workers})
+                const totalFps = (typeof topicData === 'object') ? topicData.total : topicData;
+
                 const el = document.getElementById('fps-' + topic);
-                if (el) el.textContent = fps.toFixed(1) + ' FPS';
+                if (el && typeof totalFps === 'number') {
+                    el.textContent = totalFps.toFixed(1) + ' FPS';
+                }
 
                 if (!knownTopics.has(topic)) {
                     knownTopics.add(topic);
