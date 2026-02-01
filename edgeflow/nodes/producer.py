@@ -41,7 +41,7 @@ class ProducerNode(EdgeNode):
             img = np.zeros((height, width, 3), dtype=np.uint8)
             
             # ---------------------------------------------------------
-            # [Added] 강아지 테스트 이미지 합성 로직
+            # [Added] 강아지 테스트 이미지 합성 로직 (Caching enabled)
             # ---------------------------------------------------------
             dog_path = "debug_dog.jpg"
             
@@ -49,32 +49,32 @@ class ProducerNode(EdgeNode):
             if not os.path.exists(dog_path):
                 try:
                     import urllib.request
-                    # YOLO의 상징과도 같은 그 강아지 사진 URL
                     url = "https://raw.githubusercontent.com/pjreddie/darknet/master/data/dog.jpg"
                     urllib.request.urlretrieve(url, dog_path)
                     print(f"🐶 [Producer] Downloaded debug_dog.jpg for testing")
                 except Exception as e:
                     print(f"⚠️ [Producer] Failed to download dog image: {e}")
 
-            # 2-2. 이미지 읽기 및 합성
-            if os.path.exists(dog_path):
-                dog_img = cv2.imread(dog_path)
-                if dog_img is not None:
-                    # 원본 비율 유지하면서 너비 120px로 리사이징 (320x240에 맞게 축소)
-                    d_h, d_w = dog_img.shape[:2]
-                    target_w = 120
-                    scale = target_w / d_w
-                    target_h = int(d_h * scale)
-                    
-                    dog_resized = cv2.resize(dog_img, (target_w, target_h))
-                    
-                    # 우측 상단에 배치 (여백 5px)
-                    x_offset = width - target_w - 5
-                    y_offset = 5
-                    
-                    # 배경 범위를 벗어나지 않도록 클리핑
-                    if y_offset + target_h < height and x_offset + target_w < width:
-                        img[y_offset:y_offset+target_h, x_offset:x_offset+target_w] = dog_resized
+            # 2-2. 이미지 읽기 및 합성 (Cache decoded/resized image)
+            if not hasattr(self, '_dog_cache') and os.path.exists(dog_path):
+                try:
+                    dog_img = cv2.imread(dog_path)
+                    if dog_img is not None:
+                        # 원본 비율 유지하면서 너비 120px로 리사이징 (320x240에 맞게 축소)
+                        d_h, d_w = dog_img.shape[:2]
+                        target_w = 120
+                        scale = target_w / d_w
+                        target_h = int(d_h * scale)
+                        self._dog_cache = cv2.resize(dog_img, (target_w, target_h))
+                        self._dog_pos = (width - target_w - 5, 5) # (x, y)
+                except Exception as e:
+                    print(f"⚠️ Failed to cache dog image: {e}")
+                    self._dog_cache = None
+
+            if getattr(self, '_dog_cache', None) is not None:
+                x_offset, y_offset = self._dog_pos
+                target_h, target_w = self._dog_cache.shape[:2]
+                img[y_offset:y_offset+target_h, x_offset:x_offset+target_w] = self._dog_cache
             # ---------------------------------------------------------
             
             # 3. 에러 메시지 텍스트
