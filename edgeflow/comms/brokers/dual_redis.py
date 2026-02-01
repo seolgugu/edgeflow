@@ -70,8 +70,8 @@ class DualRedisBroker(BrokerInterface):
             return
         
         try:
-            # Start from 0 to read all existing messages (important for late joiners)
-            self.ctrl_redis.xgroup_create(stream, group, id='0', mkstream=True)
+            # Start from '$' to only read NEW messages (don't process history)
+            self.ctrl_redis.xgroup_create(stream, group, id='$', mkstream=True)
             self._consumer_groups.add(key)
         except redis.exceptions.ResponseError as e:
             if "BUSYGROUP" in str(e):
@@ -176,9 +176,8 @@ class DualRedisBroker(BrokerInterface):
             msg_id, fields = messages[-1]
             frame_id = fields.get(b'frame_id', b'').decode('utf-8')
             
-            # ACK ALL messages in the batch to catch up the entire group
-            for m_id, _ in messages:
-                self.ctrl_redis.xack(topic, group, m_id)
+            # ACK immediately
+            self.ctrl_redis.xack(topic, group, msg_id)
             
             # Fetch actual data from Data Redis
             data_key = f"{topic}:data:{frame_id}"

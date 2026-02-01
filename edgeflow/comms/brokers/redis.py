@@ -45,8 +45,8 @@ class RedisBroker(BrokerInterface):
         
         self._ensure_connected()
         try:
-            # Start from 0 to read all existing messages (important for late joiners)
-            self._redis.xgroup_create(stream, group, id='0', mkstream=True)
+            # Start from '$' to only read NEW messages (don't process history)
+            self._redis.xgroup_create(stream, group, id='$', mkstream=True)
             self._consumer_groups.add(key)
         except redis.ResponseError as e:
             if "BUSYGROUP" in str(e):
@@ -173,9 +173,8 @@ class RedisBroker(BrokerInterface):
             msg_id, fields = messages[-1]
             data = fields.get(b'data')
             
-            # ACK all messages to skip the backlog
-            for m_id, _ in messages:
-                self._redis.xack(topic, group, m_id)
+            # ACK immediately
+            self._redis.xack(topic, group, msg_id)
             
             return data
             

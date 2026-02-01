@@ -15,7 +15,7 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
     Generate Dockerfile for a specific node folder.
     CRITICAL: Only copies the specific node folder, not the entire project.
     """
-    base_image = build_config.get("base", "python:3.10-slim")
+    base_image = build_config.get("base", "python:3.11-bookworm")
     dependencies = build_config.get("dependencies", [])
     system_packages = build_config.get("system_packages", [])
     # [Optimization] Split dependencies into Heavy (Cached) vs Light (Frequent)
@@ -27,13 +27,12 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
         "opencv-python", "opencv-python-headless",
         "ultralytics", "pillow", "matplotlib"
     }
-    
+
     heavy_deps = []
     light_deps = []
     
     for dep in dependencies:
-        # Check if dep starts with any heavy lib name (e.g. "numpy==1.21")
-        dep_name = dep.split("=")[0].split("<")[0].split(">")[0].strip()
+        dep_name = dep.split("=")[0].split("<")[0].split(">")[0].strip().lower()
         if dep_name in known_heavy_libs:
             heavy_deps.append(dep)
         else:
@@ -72,7 +71,7 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
     apt_install_cmd = " ".join(sorted(list(all_sys_pkgs)))
 
     # Build commands
-    # Note: Use pip instead of uv for torch on ARM64 (uv has compatibility issues)
+    # Note: Use pip instead of uv for torch/heavy libs on ARM64 for best compatibility/caching
     heavy_cmd = f"RUN pip install --no-cache-dir --break-system-packages {' '.join(heavy_deps)}" if heavy_deps else None
     light_cmd = f"RUN uv pip install --system {' '.join(light_deps)}" if light_deps else None
 
