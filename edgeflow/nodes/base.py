@@ -91,13 +91,21 @@ class EdgeNode(ABC):
                 print(f"🔗 [Direct] {self.name} ==(TCP)==> {target_name} (ID: {source_id})")
             else:
                 topic = self.name # Pub/Sub uses my name as topic
-                queue_size = tgt.get('queue_size', 1)
+                
+                # QoS determines queue size: REALTIME=1 (latest only), DURABLE=100 (buffer)
+                target_qos = tgt.get('qos', QoS.REALTIME)
+                if isinstance(target_qos, int): target_qos = QoS(target_qos)
+                
+                if target_qos == QoS.REALTIME:
+                    queue_size = 1   # Only keep latest frame
+                else:
+                    queue_size = tgt.get('queue_size', 100)  # Buffer for processing
                 
                 if topic not in redis_topics:
                     handler = RedisHandler(self.broker, topic, queue_size=queue_size)
                     self.output_handlers.append(handler)
                     redis_topics.add(topic)
-                # print log...
+                    print(f"🔗 [Redis] {self.name} ==(QoS:{target_qos.name}, size:{queue_size})==> {target_name}")
 
     def execute(self):
         """노드 실행 전체 흐름 제어 (Template Method)"""

@@ -4,12 +4,12 @@ Multi-System Example - Realtime + Logging with QoS
 """
 
 from edgeflow import System, QoS, run
-from edgeflow.comms import DualRedisBroker
+from edgeflow.comms import RedisListBroker  # List-based broker for better performance
 
 # ============================================================
 # System 1: Realtime Pipeline (Redis)
 # ============================================================
-sys = System("realtime", broker=DualRedisBroker())
+sys = System("realtime", broker=DualRedisListBroker())
 
 cam = sys.node("nodes/camera", device="camera", fps=30)
 gpu = sys.node("nodes/yolo", device="gpu", replicas=2)

@@ -1,5 +1,5 @@
 #edgeflow/comms/__init__.py
-from .brokers import RedisBroker, DualRedisBroker, BrokerInterface 
+from .brokers import RedisBroker, DualRedisBroker, RedisListBroker, DualRedisListBroker, BrokerInterface 
 from .frame import Frame
 
-__all__ = ["Frame", "RedisBroker", "DualRedisBroker", "BrokerInterface"]
+__all__ = ["Frame", "RedisBroker", "DualRedisBroker", "RedisListBroker", "DualRedisListBroker", "BrokerInterface"]
