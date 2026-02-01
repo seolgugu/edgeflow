@@ -306,8 +306,17 @@ class WebInterface(BaseInterface):
                 while timestamps and timestamps[0] < cutoff:
                     timestamps.popleft()
                 
-                # FPS = 1초 윈도우 내 프레임 수
-                total_fps = round(len(timestamps), 2)
+                # FPS = (프레임 수 - 1) / (마지막 - 처음 시간)
+                if len(timestamps) >= 2:
+                    time_span = timestamps[-1] - timestamps[0]
+                    if time_span > 0:
+                        total_fps = round((len(timestamps) - 1) / time_span, 2)
+                    else:
+                        total_fps = 0.0
+                elif len(timestamps) == 1:
+                    total_fps = 1.0  # 1프레임만 있으면 최소 1fps
+                else:
+                    total_fps = 0.0
                 
                 # Worker별 FPS 계산
                 workers_fps = {}
@@ -315,7 +324,17 @@ class WebInterface(BaseInterface):
                     for worker_id, worker_ts in self.worker_timestamps[topic].items():
                         while worker_ts and worker_ts[0] < cutoff:
                             worker_ts.popleft()
-                        workers_fps[worker_id] = round(len(worker_ts), 2)
+                        
+                        if len(worker_ts) >= 2:
+                            w_span = worker_ts[-1] - worker_ts[0]
+                            if w_span > 0:
+                                workers_fps[worker_id] = round((len(worker_ts) - 1) / w_span, 2)
+                            else:
+                                workers_fps[worker_id] = 0.0
+                        elif len(worker_ts) == 1:
+                            workers_fps[worker_id] = 1.0
+                        else:
+                            workers_fps[worker_id] = 0.0
                 
                 result[topic] = {
                     "total": total_fps,
