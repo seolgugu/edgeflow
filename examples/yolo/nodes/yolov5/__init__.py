@@ -88,14 +88,14 @@ class YoloV5(ConsumerNode):
             results = self.model(im_array, imgsz=320, verbose=False)
 
             # 3. Render
-            # plot() returns a BGR numpy array of the annotated image
             processed_frame_bgr = results[0].plot()
             
-            # [Log] AI Processing Time
-            total_time = time.time() - start_process_time
-            # print(f"[{timestamp_str}] [{worker_id}] [COMPLETED] Inference Time: {total_time:.4f}s")
+            # [Framework Requirement] Now that Frame doesn't auto-encode, 
+            # the node must handle JPEG encoding (Quality 80)
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+            _, encoded_frame = cv2.imencode('.jpg', processed_frame_bgr, encode_param)
             
-            return processed_frame_bgr
+            return encoded_frame.tobytes()
 
         except Exception as e:
             print(f"[{timestamp_str}] [{worker_id}] [ERROR] AI processing failed: {e}")

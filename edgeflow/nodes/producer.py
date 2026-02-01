@@ -78,17 +78,16 @@ class ProducerNode(EdgeNode):
             # ---------------------------------------------------------
             
             # 3. 에러 메시지 텍스트
-            # Red Text "RUNTIME ERROR" (320x240 포맷에 맞게 조정)
             cv2.putText(img, "RUNTIME ERROR", (40, 100), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-            # Error Details
             cv2.putText(img, str(error_msg), (20, 140), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-            # Timestamp
             cv2.putText(img, time.strftime("%H:%M:%S"), (200, 220), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
             
-            _, encoded = cv2.imencode('.jpg', img)
+            # [Framework Design] Producer handles its own encoding
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+            _, encoded = cv2.imencode('.jpg', img, encode_param)
             return encoded.tobytes()
             
         except ImportError:
@@ -123,31 +122,26 @@ class ProducerNode(EdgeNode):
             raw_data = None
             
             try:
-                # 사용자 loop() (또는 교체된 _fallback_loop) 실행
+                # 사용자 loop() 실행
                 raw_data = self.loop()
                 
-                if raw_data is None:
-                    # None 리턴은 '정상 종료' 의미로 해석 (혹은 에러로 처리할 수도 있음)
-                    # 여기서는 그냥 break 처리하거나, 에러 프레임을 보낼 수도 있음.
-                    # 일단 None은 종료 신호로 유지.
-                    # 하지만 에러 상황에서 None을 리턴하는 경우도 있으므로...
-                    # 사용자가 명시적으로 None을 리턴하면 종료.
-                    pass
-                    
             except Exception as e:
                 print(f"❌ [Producer] Runtime Error: {e}")
                 raw_data = self._generate_error_frame(f"{type(e).__name__}")
-                time.sleep(1.0) # Error throttling
+                time.sleep(1.0) 
 
             if raw_data is None:
-                # 데이터가 없으면 스킵 (혹은 종료)
-                # user loop returning None -> Stop
-                if not isinstance(raw_data, (bytes, bytearray)): 
-                     # Check if it was really a stop signal or just no data
-                     # For now, let's keep legacy behavior: None means stop if not exception
-                     if self.running:
-                         break
+                if self.running:
+                    break
             
+            # [Optimization] If raw_data is a numpy array, encode it here in the framework base
+            # This keeps the Frame class clean and agnostic.
+            if isinstance(raw_data, np.ndarray):
+                import cv2
+                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+                _, buf = cv2.imencode('.jpg', raw_data, encode_param)
+                raw_data = buf.tobytes()
+
             # Frame 포장
             if isinstance(raw_data, Frame):
                 frame = raw_data

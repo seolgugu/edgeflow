@@ -173,8 +173,9 @@ class RedisBroker(BrokerInterface):
             msg_id, fields = messages[-1]
             data = fields.get(b'data')
             
-            # ACK immediately
-            self._redis.xack(topic, group, msg_id)
+            # ACK EVERYTHING in this batch to prevent PEL (Pending Entry List) leakage
+            ids = [m[0] for m in messages]
+            self._redis.xack(topic, group, *ids)
             
             return data
             
