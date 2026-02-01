@@ -1,4 +1,4 @@
 [build]
 base = "python:3.11-slim-bookworm"
-dependencies = ["opencv-python-headless", "numpy"]
+dependencies = ["opencv-python-headless"]
 system_packages = ["python3-picamera2", "libgomp1"]

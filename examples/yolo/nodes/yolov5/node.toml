@@ -9,8 +9,7 @@ dependencies = [
     "pandas", 
     "seaborn", 
     "tqdm", 
-    "psutil",
-    "ultralytics"
+    "psutil"
 ]
 system_packages = [] # 이제 프레임워크가 자동으로 의존성을 해결합니다.
 
