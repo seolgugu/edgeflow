@@ -71,6 +71,7 @@ class ConsumerNode(EdgeNode):
                     continue
 
                 out_img, out_meta = result if isinstance(result, tuple) else (result, {})
+                out_meta['worker_id'] = self.hostname  # Inject worker ID for FPS tracking
                 resp = Frame(frame.frame_id, frame.timestamp, out_meta, out_img)
                 self.send_result(resp)
 

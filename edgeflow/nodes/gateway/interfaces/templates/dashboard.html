@@ -309,9 +309,16 @@
         function updateDashboard(data) {
             if (!data) return;
 
-            // 1. Update FPS
-            document.getElementById('fps-json').textContent = JSON.stringify(data.fps, null, 2);
-            for (const [topic, fps] of Object.entries(data.fps)) {
+            // 1. Update FPS (handle new nested format)
+            const fpsData = data.fps || {};
+            const topicsFps = fpsData.topics || fpsData; // Fallback for old format
+            const workersFps = fpsData.workers || {};
+
+            // Display full FPS JSON including workers
+            document.getElementById('fps-json').textContent = JSON.stringify(fpsData, null, 2);
+
+            // Update topic-level FPS on cards
+            for (const [topic, fps] of Object.entries(topicsFps)) {
                 const el = document.getElementById('fps-' + topic);
                 if (el) el.textContent = fps.toFixed(1) + ' FPS';
 

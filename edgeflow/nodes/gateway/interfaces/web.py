@@ -39,7 +39,9 @@ class WebInterface(BaseInterface):
 
         # [신규] FPS 추적용 변수
         self.frame_counts = defaultdict(int)  # topic -> count
+        self.worker_frame_counts = defaultdict(int)  # worker_id -> count
         self.fps_stats = {}  # topic -> fps (최근 계산값)
+        self.worker_fps_stats = {}  # worker_id -> fps
         self.last_fps_calc_time = time.time()
         
         # [신규] WebSocket 클라이언트 관리
@@ -134,6 +136,11 @@ class WebInterface(BaseInterface):
 
             self.buffers[topic].push(frame)
             self.frame_counts[topic] += 1  # [신규] FPS 카운트
+            
+            # [신규] Worker FPS 카운트
+            worker_id = frame.meta.get('worker_id')
+            if worker_id:
+                self.worker_frame_counts[worker_id] += 1
 
             if frame.meta:
                 if topic not in self.latest_meta:
@@ -197,11 +204,21 @@ class WebInterface(BaseInterface):
             now = time.time()
             elapsed = now - self.last_fps_calc_time
             if elapsed > 0:
+                # Topic FPS
                 for topic, count in self.frame_counts.items():
                     self.fps_stats[topic] = round(count / elapsed, 2)
-                self.frame_counts = defaultdict(int)  # 리셋
+                self.frame_counts = defaultdict(int)
+                
+                # Worker FPS
+                for worker_id, count in self.worker_frame_counts.items():
+                    self.worker_fps_stats[worker_id] = round(count / elapsed, 2)
+                self.worker_frame_counts = defaultdict(int)
+                
                 self.last_fps_calc_time = now
-            return JSONResponse(content=self.fps_stats)
+            return JSONResponse(content={
+                "topics": self.fps_stats,
+                "workers": self.worker_fps_stats
+            })
 
     # [신규] Dashboard HTML 페이지
     async def dashboard(self):
