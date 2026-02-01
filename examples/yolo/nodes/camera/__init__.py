@@ -34,7 +34,7 @@ class Camera(ProducerNode):
         im_array = self.picam.capture_array()
         
         # Encode to JPEG
-        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
         _, encoded = cv2.imencode('.jpg', im_array, encode_param)
         return encoded.tobytes()
 

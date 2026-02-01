@@ -85,7 +85,7 @@ class ProducerNode(EdgeNode):
             cv2.putText(img, time.strftime("%H:%M:%S"), (200, 220), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
             
-            # [Framework Design] Producer handles its own encoding
+            # [Framework Design] Hardcoded quality 80 for fallback frame only
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
             _, encoded = cv2.imencode('.jpg', img, encode_param)
             return encoded.tobytes()
@@ -134,14 +134,6 @@ class ProducerNode(EdgeNode):
                 if self.running:
                     break
             
-            # [Optimization] If raw_data is a numpy array, encode it here in the framework base
-            # This keeps the Frame class clean and agnostic.
-            if isinstance(raw_data, np.ndarray):
-                import cv2
-                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
-                _, buf = cv2.imencode('.jpg', raw_data, encode_param)
-                raw_data = buf.tobytes()
-
             # Frame 포장
             if isinstance(raw_data, Frame):
                 frame = raw_data
