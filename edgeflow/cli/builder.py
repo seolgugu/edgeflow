@@ -3,6 +3,7 @@
 
 import subprocess
 import os
+import time
 import tempfile
 from pathlib import Path
 from typing import List, Dict, Any
@@ -83,12 +84,16 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
     env = Environment(loader=FileSystemLoader(str(template_dir)))
     template = env.get_template("Dockerfile.j2")
     
+    # Dynamic version for cache busting
+    framework_v = time.strftime("%Y%m%d-%H%M%S")
+
     dockerfile = template.render(
         base_image=base_image,
         apt_install_cmd=apt_install_cmd,
         node_path=node_path,
         heavy_cmd=heavy_cmd,
-        light_cmd=light_cmd
+        light_cmd=light_cmd,
+        framework_version=framework_v
     )
 
     return dockerfile
