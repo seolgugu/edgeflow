@@ -150,19 +150,18 @@ class DualRedisBroker(BrokerInterface):
     def pop_latest(self, topic, timeout=1, group="default", consumer="worker"):
         """
         Read the LATEST message using Consumer Groups (REALTIME mode with distribution).
-        - Uses XREADGROUP for proper load balancing across replicas
-        - Each consumer group (node type) gets independent delivery
-        - '>' reads only NEW messages not yet delivered to this group
+        - To ensure REALTIME, we read a batch and only take the last one.
+        - We ACK all messages in the batch to "catch up" the group pointer.
         """
         self._ensure_consumer_group(topic, group)
         
         try:
-            # XREADGROUP with '>' = only new messages for this group
+            # Read a batch (e.g. up to 100) to find the latest
             result = self.ctrl_redis.xreadgroup(
                 groupname=group,
                 consumername=consumer,
                 streams={topic: '>'},
-                count=1,
+                count=100, # Jump ahead if there's a backlog
                 block=int(timeout * 1000)
             )
             
@@ -173,11 +172,13 @@ class DualRedisBroker(BrokerInterface):
             if not messages:
                 return None
             
-            msg_id, fields = messages[0]
+            # Take the LAST message (freshest in this batch)
+            msg_id, fields = messages[-1]
             frame_id = fields.get(b'frame_id', b'').decode('utf-8')
             
-            # ACK immediately (we won't retry on failure)
-            self.ctrl_redis.xack(topic, group, msg_id)
+            # ACK ALL messages in the batch to catch up the entire group
+            for m_id, _ in messages:
+                self.ctrl_redis.xack(topic, group, m_id)
             
             # Fetch actual data from Data Redis
             data_key = f"{topic}:data:{frame_id}"

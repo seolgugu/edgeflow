@@ -19,24 +19,22 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
     system_packages = build_config.get("system_packages", [])
     # [Optimization] Split dependencies into Heavy (Cached) vs Light (Frequent)
     # This prevents re-downloading PyTorch just because we added 'requests'
-    pip_heavy_libs = {"torch", "torchvision", "torchaudio", "ultralytics"}
-    uv_heavy_libs = {
+    known_heavy_libs = {
+        "torch", "torchvision", "torchaudio", 
         "tensorflow", "keras", 
         "numpy", "pandas", "scipy", "scikit-learn", 
         "opencv-python", "opencv-python-headless",
-        "pillow", "matplotlib"
+        "ultralytics", "pillow", "matplotlib"
     }
-
-    pip_deps = []
-    uv_heavy_deps = []
+    
+    heavy_deps = []
     light_deps = []
     
     for dep in dependencies:
-        dep_name = dep.split("=")[0].split("<")[0].split(">")[0].strip().lower()
-        if dep_name in pip_heavy_libs:
-            pip_deps.append(dep)
-        elif dep_name in uv_heavy_libs:
-            uv_heavy_deps.append(dep)
+        # Check if dep starts with any heavy lib name (e.g. "numpy==1.21")
+        dep_name = dep.split("=")[0].split("<")[0].split(">")[0].strip()
+        if dep_name in known_heavy_libs:
+            heavy_deps.append(dep)
         else:
             light_deps.append(dep)
             
@@ -73,12 +71,9 @@ def generate_dockerfile(node_path: str, build_config: Dict[str, Any]) -> str:
     apt_install_cmd = " ".join(sorted(list(all_sys_pkgs)))
 
     # Build commands
-    # Use pip for torch on ARM64 if needed, uv for others
-    heavy_cmd = f"RUN pip install --no-cache-dir --break-system-packages {' '.join(pip_deps)}" if pip_deps else None
-    
-    # Combine uv_heavy (cached) and light deps
-    all_uv_deps = uv_heavy_deps + light_deps
-    light_cmd = f"RUN uv pip install --system {' '.join(all_uv_deps)}" if all_uv_deps else None
+    # Note: Use pip instead of uv for torch on ARM64 (uv has compatibility issues)
+    heavy_cmd = f"RUN pip install --no-cache-dir --break-system-packages {' '.join(heavy_deps)}" if heavy_deps else None
+    light_cmd = f"RUN uv pip install --system {' '.join(light_deps)}" if light_deps else None
 
 
     
