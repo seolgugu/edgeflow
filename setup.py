@@ -11,8 +11,6 @@ setup(
         "kubernetes",
         "jinja2",
         "docker",
-        "numpy",
-        "opencv-python",
         "fastapi",
         "uvicorn"
     ],

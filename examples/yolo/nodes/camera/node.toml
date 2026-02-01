@@ -1,4 +1,4 @@
 [build]
-base = "python:3.11-slim-bookworm"
-dependencies = ["opencv-python-headless"]
-system_packages = ["python3-picamera2", "libgomp1"]
+base = "debian:bookworm"
+dependencies = []
+system_packages = ["python3.11", "python3-picamera2", "python3-opencv", "python3-redis", "libgomp1"]
