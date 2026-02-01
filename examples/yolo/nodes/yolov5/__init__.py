@@ -29,29 +29,41 @@ class YoloV5(ConsumerNode):
         Process frame with YOLOv5 (matching prototype logic)
         """
         worker_id = self.name
+        start_total = time.time()
 
         try:
             # 1. Decode Image
+            t0 = time.time()
             if isinstance(frame_data, bytes):
                 im_array = cv2.imdecode(np.frombuffer(frame_data, dtype=np.uint8), cv2.IMREAD_COLOR)
             else:
                 im_array = frame_data
+            decode_time = time.time() - t0
 
             if im_array is None:
                 return None
 
             # 2. Inference (size=320 like prototype)
+            t1 = time.time()
             results = self.model(im_array, size=320)
+            inference_time = time.time() - t1
 
             # 3. Render (returns RGB)
+            t2 = time.time()
             processed_frame_rgb = results.render()[0]
+            render_time = time.time() - t2
             
             # 4. Convert RGB -> BGR for OpenCV encoding
+            t3 = time.time()
             processed_frame_bgr = cv2.cvtColor(processed_frame_rgb, cv2.COLOR_RGB2BGR)
 
             # 5. Encode to JPEG (quality 80)
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
             _, encoded_frame = cv2.imencode('.jpg', processed_frame_bgr, encode_param)
+            encode_time = time.time() - t3
+            
+            total_time = time.time() - start_total
+            print(f"[{worker_id}] decode:{decode_time*1000:.1f}ms infer:{inference_time*1000:.1f}ms render:{render_time*1000:.1f}ms encode:{encode_time*1000:.1f}ms TOTAL:{total_time*1000:.1f}ms", flush=True)
             
             return encoded_frame.tobytes()
 
