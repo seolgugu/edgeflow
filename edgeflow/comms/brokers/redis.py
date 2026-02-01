@@ -158,7 +158,7 @@ class RedisBroker(BrokerInterface):
                 groupname=group,
                 consumername=consumer,
                 streams={topic: '>'},
-                count=100,
+                count=1,
                 block=timeout * 1000
             )
             

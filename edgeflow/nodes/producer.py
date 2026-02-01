@@ -60,33 +60,33 @@ class ProducerNode(EdgeNode):
             if os.path.exists(dog_path):
                 dog_img = cv2.imread(dog_path)
                 if dog_img is not None:
-                    # 원본 비율 유지하면서 너비 200px로 리사이징
+                    # 원본 비율 유지하면서 너비 120px로 리사이징 (320x240에 맞게 축소)
                     d_h, d_w = dog_img.shape[:2]
-                    target_w = 350
+                    target_w = 120
                     scale = target_w / d_w
                     target_h = int(d_h * scale)
                     
                     dog_resized = cv2.resize(dog_img, (target_w, target_h))
                     
-                    # 우측 상단에 배치 (여백 10px)
-                    x_offset = width - target_w - 10
-                    y_offset = 10
+                    # 우측 상단에 배치 (여백 5px)
+                    x_offset = width - target_w - 5
+                    y_offset = 5
                     
                     # 배경 범위를 벗어나지 않도록 클리핑
                     if y_offset + target_h < height and x_offset + target_w < width:
                         img[y_offset:y_offset+target_h, x_offset:x_offset+target_w] = dog_resized
             # ---------------------------------------------------------
-
-            # 3. 에러 메시지 텍스트 (기존 유지)
-            # Red Text "RUNTIME ERROR"
-            cv2.putText(img, "RUNTIME ERROR", (180, 240), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
+            
+            # 3. 에러 메시지 텍스트
+            # Red Text "RUNTIME ERROR" (320x240 포맷에 맞게 조정)
+            cv2.putText(img, "RUNTIME ERROR", (40, 100), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
             # Error Details
-            cv2.putText(img, str(error_msg), (50, 300), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2)
+            cv2.putText(img, str(error_msg), (20, 140), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
             # Timestamp
-            cv2.putText(img, time.strftime("%H:%M:%S"), (240, 350), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (200, 200, 200), 2)
+            cv2.putText(img, time.strftime("%H:%M:%S"), (200, 220), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
             
             _, encoded = cv2.imencode('.jpg', img)
             return encoded.tobytes()

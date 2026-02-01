@@ -161,7 +161,7 @@ class DualRedisBroker(BrokerInterface):
                 groupname=group,
                 consumername=consumer,
                 streams={topic: '>'},
-                count=100, # Jump ahead if there's a backlog
+                count=1, # Reverted to 1 for fair distribution. 
                 block=int(timeout * 1000)
             )
             
