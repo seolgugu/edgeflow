@@ -1,0 +1,43 @@
+FROM python:3.11-slim-bookworm
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+WORKDIR /app
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# [Auto-Fix] Add Raspberry Pi Repo if picamera2 is requested
+RUN if echo "git gnupg libgl1 libglib2.0-0 libgomp1 python3-picamera2 wget" | grep -q "picamera2"; then \
+    echo "deb http://archive.raspberrypi.org/debian/ bookworm main" > /etc/apt/sources.list.d/raspi.list \
+    && apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 82B129927FA3303E; \
+    fi
+
+RUN apt-get update && apt-get install -y \
+    git gnupg libgl1 libglib2.0-0 libgomp1 python3-picamera2 wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# [Fix] Make apt-installed packages (like python3-picamera2) visible to /usr/local/bin/python
+ENV PYTHONPATH="/usr/lib/python3/dist-packages"
+
+# [Layer 1] Heavy Dependencies (Cached often)
+# Examples: torch, numpy, opencv
+
+RUN pip install --no-cache-dir --break-system-packages opencv-python-headless numpy
+
+
+# Install edgeflow framework from GitHub (Cache-busted)
+RUN uv pip install --system "git+https://github.com/seolgugu/edgeflow.git"  # v=20260201-1
+
+# [Layer 2] Light Dependencies (Frequent changes)
+# Examples: requests, flask
+# Placed BEFORE source code copy to prevent code changes from invalidating this layer
+
+
+# Copy ONLY this specific node folder
+COPY nodes/camera/ /app/nodes/camera/
+
+# Default command
+CMD ["python", "-c", "print('Node ready')"]

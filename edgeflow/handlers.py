@@ -1,7 +1,9 @@
-# edgeflow/handlers.py
 import socket
 import struct
 import asyncio
+import threading
+import queue
+import time
 
 class RedisHandler:
     def __init__(self, broker, topic, queue_size=1):
@@ -22,43 +24,69 @@ class TcpHandler:
         self.port = port
         self.source_id = source_id
         self.sock = None
+        self.queue = queue.Queue(maxsize=10) # Prevent memory explosion
+        self.worker_thread = None
+        self.running = True
+        
+        # Start Worker Thread
+        self.worker_thread = threading.Thread(target=self._worker, daemon=True)
+        self.worker_thread.start()
 
     def connect(self):
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(0.5)  # Fast fail if Gateway not ready
+            self.sock.settimeout(1.0) 
             self.sock.connect((self.host, self.port))
-            self.sock.settimeout(None) # Blocking mode for sending
+            self.sock.settimeout(None)
             self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        except (socket.timeout, ConnectionRefusedError, OSError):
-            # print(f"⚠️ TCP Connect Failed: {e}") 
-            # Quietly fail to allow retry in next frame
+            print(f"✅ [TcpHandler] Connected to Gateway at {self.host}:{self.port}")
+        except Exception:
             if self.sock:
                 self.sock.close()
             self.sock = None
 
+    def _worker(self):
+        """Background thread for sending data"""
+        while self.running:
+            try:
+                frame = self.queue.get(timeout=1.0)
+            except queue.Empty:
+                continue
+
+            if self.sock is None:
+                self.connect()
+            
+            if self.sock:
+                try:
+                    # [Identity] Gateway 라우팅을 위해 소스 ID 주입
+                    frame.meta["topic"] = self.source_id
+                    packet_body = frame.to_bytes()
+                    length_header = struct.pack('>I', len(packet_body))
+                    
+                    self.sock.sendall(length_header + packet_body)
+                except Exception:
+                    # Connection lost
+                    self.sock.close()
+                    self.sock = None
+            
+            self.queue.task_done()
+
     def send(self, frame):
-        if self.sock is None:
-            self.connect()
-            if self.sock is None: return
-
+        """Non-blocking put into queue"""
         try:
-            # 1. [Identity] Gateway 라우팅을 위해 소스 ID 주입
-            # 원본 프레임의 메타데이터를 수정하는 것이므로 주의 (복사본 사용 권장되나 성능상 직접 수정)
-            frame.meta["topic"] = self.source_id
+            # If queue is full, drop oldest to maintain real-time
+            if self.queue.full():
+                try:
+                    self.queue.get_nowait()
+                except queue.Empty:
+                    pass
+            self.queue.put_nowait(frame)
+        except Exception:
+            pass
 
-            # 2. [Serialization] Frame -> Bytes
-            packet_body = frame.to_bytes()
-            
-            # 3. [Framing] 길이 헤더 추가 (4 bytes)
-            length_header = struct.pack('>I', len(packet_body))
-            
-            # print(f"DEBUG: TcpHandler sending topic={frame.meta.get('topic')} len={len(packet_body)}")
-            self.sock.sendall(length_header + packet_body)
-
-        except (BrokenPipeError, ConnectionResetError):
+    def close(self):
+        self.running = False
+        if self.worker_thread:
+            self.worker_thread.join(timeout=1.0)
+        if self.sock:
             self.sock.close()
-            self.sock = None
-        except Exception as e:
-            # print(f"⚠️ Send Error: {e}")
-            self.sock = None

@@ -147,48 +147,43 @@ class DualRedisBroker(BrokerInterface):
             print(f"DualRedis Pop Error: {e}")
             return None
 
-    def pop_latest(self, topic, timeout=1):
+    def pop_latest(self, topic, timeout=1, group="default", consumer="worker"):
         """
-        Read the LATEST UNIQUE message (REALTIME mode).
-        - Dedplicates frames: Returns None if no NEW frame exists
-        - Efficient waiting: Blocks until new data arrives
+        Read the LATEST message using Consumer Groups (REALTIME mode with distribution).
+        - Uses XREADGROUP for proper load balancing across replicas
+        - Each consumer group (node type) gets independent delivery
+        - '>' reads only NEW messages not yet delivered to this group
         """
+        self._ensure_consumer_group(topic, group)
+        
         try:
-            start_time = time.time()
+            # XREADGROUP with '>' = only new messages for this group
+            result = self.ctrl_redis.xreadgroup(
+                groupname=group,
+                consumername=consumer,
+                streams={topic: '>'},
+                count=1,
+                block=int(timeout * 1000)
+            )
             
-            while True:
-                # 1. Get current tip
-                entries = self.ctrl_redis.xrevrange(topic, count=1)
-                
-                if entries:
-                    msg_id, fields = entries[0]
-                    last_seen = self._topic_last_id.get(topic)
-                    
-                    if msg_id != last_seen:
-                        # New frame found!
-                        self._topic_last_id[topic] = msg_id
-                        frame_id = fields.get(b'frame_id', b'').decode('utf-8')
-                        data_key = f"{topic}:data:{frame_id}"
-                        raw_data = self.data_redis.get(data_key)
-                        return raw_data if raw_data else None
-                
-                # Check timeout
-                elapsed = time.time() - start_time
-                remaining = timeout - elapsed
-                if remaining <= 0:
-                    return None
-                
-                # 2. Wait for NEW data using XREAD with '$' (special ID for "new items only")
-                # This blocks efficiently until something is added.
-                try:
-                    block_ms = int(remaining * 1000)
-                    self.ctrl_redis.xread({topic: '$'}, count=1, block=block_ms)
-                except redis.exceptions.ResponseError:
-                    # Stream might not exist yet
-                    time.sleep(0.1)
-                
-                # Loop continues -> xrevrange again to get the absolute latest
-                
+            if not result:
+                return None
+            
+            stream_name, messages = result[0]
+            if not messages:
+                return None
+            
+            msg_id, fields = messages[0]
+            frame_id = fields.get(b'frame_id', b'').decode('utf-8')
+            
+            # ACK immediately (we won't retry on failure)
+            self.ctrl_redis.xack(topic, group, msg_id)
+            
+            # Fetch actual data from Data Redis
+            data_key = f"{topic}:data:{frame_id}"
+            raw_data = self.data_redis.get(data_key)
+            return raw_data if raw_data else None
+            
         except Exception as e:
             print(f"DualRedis PopLatest Error: {e}")
             return None

@@ -144,42 +144,38 @@ class RedisBroker(BrokerInterface):
         return stats
 
 
-    def pop_latest(self, topic: str, timeout: int = 1) -> Optional[bytes]:
+    def pop_latest(self, topic: str, timeout: int = 1, group: str = "default", consumer: str = "worker") -> Optional[bytes]:
         """
-        Read the LATEST UNIQUE message (REALTIME mode).
-        - Dedplicates frames: Returns None if no NEW frame exists
-        - Efficient waiting: Blocks until new data arrives
+        Read the LATEST message using Consumer Groups (REALTIME mode with distribution).
+        - Uses XREADGROUP for proper load balancing across replicas
+        - Each consumer group (node type) gets independent delivery
         """
         self._ensure_connected()
+        self._ensure_consumer_group(topic, group)
+        
         try:
-            start_time = time.time()
+            result = self._redis.xreadgroup(
+                groupname=group,
+                consumername=consumer,
+                streams={topic: '>'},
+                count=1,
+                block=timeout * 1000
+            )
             
-            while True:
-                # 1. Get current tip
-                entries = self._redis.xrevrange(topic, count=1)
-                
-                if entries:
-                    msg_id, fields = entries[0]
-                    last_seen = self._topic_last_id.get(topic)
-                    
-                    if msg_id != last_seen:
-                        # New frame found!
-                        self._topic_last_id[topic] = msg_id
-                        data = fields.get(b'data')
-                        return data
-                
-                # Check timeout
-                elapsed = time.time() - start_time
-                remaining = timeout - elapsed
-                if remaining <= 0:
-                    return None
-                
-                # 2. Wait for NEW data using XREAD with '$'
-                try:
-                    block_ms = int(remaining * 1000)
-                    self._redis.xread({topic: '$'}, count=1, block=block_ms)
-                except redis.exceptions.ResponseError:
-                    time.sleep(0.1)
+            if not result:
+                return None
+            
+            stream_name, messages = result[0]
+            if not messages:
+                return None
+            
+            msg_id, fields = messages[0]
+            data = fields.get(b'data')
+            
+            # ACK immediately
+            self._redis.xack(topic, group, msg_id)
+            
+            return data
             
         except Exception as e:
             print(f"Redis PopLatest Error: {e}")

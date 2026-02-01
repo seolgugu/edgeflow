@@ -52,8 +52,8 @@ class ConsumerNode(EdgeNode):
         while self.running:
             # QoS에 따라 다른 읽기 전략
             if qos == QoS.REALTIME:
-                # REALTIME: 최신만 읽기
-                packet = self.broker.pop_latest(target_topic, timeout=1)
+                # REALTIME: 최신만 읽기 (Consumer Group으로 분산)
+                packet = self.broker.pop_latest(target_topic, timeout=1, group=group_name, consumer=consumer_id)
             else:
                 # DURABLE/BALANCED: 순차 읽기 (Consumer Group)
                 packet = self.broker.pop(target_topic, timeout=1, group=group_name, consumer=consumer_id)
