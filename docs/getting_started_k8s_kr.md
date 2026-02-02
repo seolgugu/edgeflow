@@ -9,8 +9,7 @@
 ## 1. 사전 준비
 
 ### 1-1. Kubernetes 클러스터
-- **Edge Device**: [K3s](https://k3s.io/) 권장 (가볍고 빠름)
-- **Cloud/Server**: EKS, GKE, kubeadm 등 모든 표준 클러스터 지원
+- **Edge Device**: [K3s](https://k3s.io/) 권장 (가벼움)
 
 ```bash
 # K3s 설치 (Linux)
