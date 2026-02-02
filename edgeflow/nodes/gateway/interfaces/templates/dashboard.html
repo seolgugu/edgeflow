@@ -26,17 +26,21 @@
         }
 
         .grid {
-            display: flex;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             justify-content: center;
+            max-width: 1400px;
+            margin: 0 auto;
         }
 
         .card {
             background: rgba(22, 33, 62, 0.9);
             border-radius: 16px;
             padding: 15px;
-            width: 400px;
+            width: 100%;
+            max-width: 500px;
+            justify-self: center;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             border: 1px solid rgba(0, 212, 255, 0.1);
             transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
@@ -164,37 +168,76 @@
 
         /* Mobile Responsive */
         @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            h1 {
+                font-size: 1.4em;
+                margin-bottom: 15px;
+            }
+
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+
+            .card {
+                padding: 8px;
+                max-width: none;
+            }
+
+            .fps-overlay {
+                padding: 4px 6px;
+                top: 5px;
+                right: 5px;
+            }
+
+            .fps-overlay .topic-name {
+                font-size: 0.7em;
+            }
+
+            .fps-overlay .fps-value {
+                font-size: 0.8em;
+            }
+
             .stats {
-                padding: 20px 15px;
-                margin-top: 30px;
+                padding: 15px 10px;
+                margin-top: 20px;
+            }
+
+            .stats h2 {
+                font-size: 1.2em;
             }
 
             .stats-grid {
                 grid-template-columns: 1fr 1fr;
-                gap: 15px;
+                gap: 10px;
             }
 
             .stats-section {
                 min-height: auto;
-                padding: 15px;
+                padding: 10px;
+            }
+
+            .stats-section h3 {
+                font-size: 0.9em;
+            }
+
+            .stats-section pre {
+                font-size: 0.75em;
             }
 
             /* System Resources spans full width on mobile */
             .stats-section:nth-child(3) {
                 grid-column: 1 / -1;
             }
+        }
 
-            .card {
-                width: 100%;
-                max-width: 400px;
-            }
-
-            h1 {
-                font-size: 1.5em;
-            }
-
-            body {
-                padding: 15px;
+        /* Very small screens */
+        @media (max-width: 480px) {
+            .grid {
+                grid-template-columns: 1fr;
             }
         }
 
