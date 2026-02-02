@@ -158,13 +158,18 @@
             }
 
             .stats-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr 1fr;
                 gap: 15px;
             }
 
             .stats-section {
                 min-height: auto;
                 padding: 15px;
+            }
+
+            /* System Resources spans full width on mobile */
+            .stats-section:nth-child(3) {
+                grid-column: 1 / -1;
             }
 
             .card {
