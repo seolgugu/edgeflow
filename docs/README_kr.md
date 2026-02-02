@@ -11,6 +11,8 @@ Kubernetes 기반의 자동화된 배포를 지원하며, 노드 추가를 통�
 
 [🇺🇸 English](../README.md) | [🇰🇷 한국어](README_kr.md) | [📖 기술 상세 문서](TECHNICAL_DEEP_DIVE.md)
 
+![EdgeFlow Dashboard](assets/dashboard.png)
+
 ---
 
 ## ✨ 주요 기능

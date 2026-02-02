@@ -12,6 +12,8 @@ Scale horizontally to increase FPS linearly with the number of nodes. Deploy to 
 
 [🇺🇸 English](README.md) | [🇰🇷 한국어](docs/README_kr.md) | [📖 Technical Deep Dive](docs/TECHNICAL_DEEP_DIVE.md)
 
+![EdgeFlow Dashboard](docs/assets/dashboard.png)
+
 ---
 
 ## ✨ Key Features
