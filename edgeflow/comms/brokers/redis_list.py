@@ -72,7 +72,11 @@ class RedisListBroker(BrokerInterface):
             pipe = self._redis.pipeline()
             pipe.rpush(topic, data)
             pipe.ltrim(topic, -limit, -1)
+
             pipe.execute()
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            print(f"⚠️ Redis connection lost in push: {e}")
+            self._redis = None  # Force reconnect on next call
         except Exception as e:
             print(f"Redis Push Error: {e}")
 

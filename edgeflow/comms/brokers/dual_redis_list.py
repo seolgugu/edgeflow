@@ -147,6 +147,10 @@ class DualRedisListBroker(BrokerInterface):
                 self.data_redis.set(data_key, frame_bytes, ex=60)
                 self.ctrl_redis.rpush(topic, str(frame_id))
                 self.ctrl_redis.ltrim(topic, -limit, -1)
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            print(f"⚠️ Redis connection lost in push: {e}")
+            self.ctrl_redis = None
+            self.data_redis = None
         except Exception as e:
             print(f"DualRedisListBroker Push Error: {e}")
 
