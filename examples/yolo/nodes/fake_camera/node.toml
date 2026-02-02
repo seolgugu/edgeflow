@@ -1,0 +1,6 @@
+[build]
+base = "python:3.10-slim"
+dependencies = ["opencv-python-headless", "numpy"]
+
+[runtime]
+gpu = false

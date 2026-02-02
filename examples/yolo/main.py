@@ -13,17 +13,21 @@ app = System("yolo-app", broker=broker)  # 변수명을 'app'으로 하면 더 �
 # 2. Register Nodes
 cam = app.node("nodes/camera")
 yolo = app.node("nodes/yolov5", replicas=1)
+
+fake_cam = app.node("nodes/fake_camera", device="camera", fps=30)
+fake_yolo = app.node("nodes/fake_yolo", replicas=2)
+
 gw = app.node("nodes/gateway", node_port=30080)
 
 # 3. Wiring
 # Camera -> YoloV5 (Realtime)
-app.link(cam).to(yolo, qos=QoS.REALTIME)
+app.link(cam).to(yolo, qos=QoS.REALTIME).to(gw)
 
-# Camera -> Gateway (Debugging)
-app.link(cam).to(gw)
+app.link(fake_cam).to(fake_yolo, qos=QoS.REALTIME).to(gw)
 
 # YoloV5 -> Gateway (Result)
 app.link(yolo).to(gw)
+app.link(fake_yolo).to(gw)
 
 # ============================================================
 # 실행 진입점
