@@ -95,6 +95,23 @@ if __name__ == "__main__":
 
 ---
 
+## 📦 Dependency Management
+
+Node dependencies (Python packages, system libraries) are defined in `node.toml`.
+It is recommended to use the `edgeflow add` command to install dependencies instead of editing files manually.
+
+```bash
+# 1. Add Python package (e.g., numpy)
+edgeflow add numpy --node nodes/my-node
+
+# 2. Add System package (e.g., libgl1) - apt install
+edgeflow add libgl1 --node nodes/my-node --apt
+```
+
+> **Note:** After changing dependencies, you must rebuild images using `edgeflow up` or `edgeflow build`.
+
+---
+
 ## ☸️ Deploy to Kubernetes
 
 For Kubernetes deployment, see: **[K8s Deployment Guide](docs/getting_started_k8s_kr.md)**
@@ -110,6 +127,7 @@ edgeflow up main.py --registry docker.io/yourusername --arch linux/arm64
 | Command | Description |
 |---------|-------------|
 | `local` | Run locally with uv |
+| `add` | Add dependency |
 | `up` | Build, Push, Deploy (All-in-one) |
 | `sync` | Hot reload code to running pods |
 | `logs` | View node logs from K8s |
