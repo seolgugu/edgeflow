@@ -74,6 +74,23 @@ Open `http://localhost:8000/dashboard` in your browser.
 
 ## 📝 Example Code (`main.py`)
 
+### 📂 Project Structure
+
+```bash
+examples/tutorial
+├── main.py                  # Pipeline definition & Entry point
+└── nodes/                   # Node implementations
+    ├── camera/              # Video Capture Node
+    │   ├── __init__.py      # Node Logic (CameraNode Class)
+    │   └── node.toml        # Dependencies (opencv-python etc.)
+    ├── yolo/                # AI Inference Node
+    │   ├── __init__.py      # Node Logic (YoloNode Class)
+    │   └── node.toml        # Dependencies (torch, ultralytics etc.)
+    └── gateway/             # Output & Visualization Node
+        ├── __init__.py      # Node Logic (GatewayNode Class)
+        └── node.toml        # Dependencies & Base Image
+```
+
 ```python
 from edgeflow import System, QoS
 from edgeflow.comms import RedisListBroker

@@ -73,6 +73,23 @@ edgeflow local examples/tutorial/main.py
 
 ## 📝 예제 코드 (`main.py`)
 
+### 📂 프로젝트 구조
+
+```bash
+examples/tutorial
+├── main.py                  # 파이프라인 정의 및 실행 진입점
+└── nodes/                   # 각 역할을 수행하는 노드들
+    ├── camera/              # Video -> Frame 변환 노드
+    │   ├── __init__.py      # 노드 로직 (CameraNode Class)
+    │   └── node.toml        # 의존성 (opencv-python 등)
+    ├── yolo/                # AI 추론 노드
+    │   ├── __init__.py      # 노드 로직 (YoloNode Class)
+    │   └── node.toml        # 의존성 (torch, ultralytics 등)
+    └── gateway/             # 결과 송출 및 시각화 노드
+        ├── __init__.py      # 노드 로직 (GatewayNode Class)
+        └── node.toml        # 의존성 및 이미지가 정의됨
+```
+
 ```python
 from edgeflow import System, QoS
 from edgeflow.comms import RedisListBroker
