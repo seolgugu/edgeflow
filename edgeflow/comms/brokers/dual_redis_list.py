@@ -122,6 +122,14 @@ class DualRedisListBroker(BrokerInterface):
         
         self._ensure_connected()
         
+        # Get limit from local cache, or fetch from Redis (for distributed env)
+        if topic not in self._topic_limits:
+            limit_bytes = self.ctrl_redis.get(f"edgeflow:meta:limit:{topic}")
+            if limit_bytes:
+                self._topic_limits[topic] = int(limit_bytes)
+        
+        limit = self._topic_limits.get(topic, self.maxlen)
+        
         # Extract frame_id from header
         frame_id = struct.unpack('!I', frame_bytes[:4])[0]
         data_key = f"{topic}:data:{frame_id}"
@@ -132,15 +140,12 @@ class DualRedisListBroker(BrokerInterface):
                 pipe = self.ctrl_redis.pipeline()
                 pipe.set(data_key, frame_bytes, ex=60)  # 60s TTL
                 pipe.rpush(topic, str(frame_id))
-                # Trim to maintain max size
-                limit = self._topic_limits.get(topic, self.maxlen)
                 pipe.ltrim(topic, -limit, -1)
                 pipe.execute()
             else:
                 # Separate instances
                 self.data_redis.set(data_key, frame_bytes, ex=60)
                 self.ctrl_redis.rpush(topic, str(frame_id))
-                limit = self._topic_limits.get(topic, self.maxlen)
                 self.ctrl_redis.ltrim(topic, -limit, -1)
         except Exception as e:
             print(f"DualRedisListBroker Push Error: {e}")
@@ -165,7 +170,11 @@ class DualRedisListBroker(BrokerInterface):
             raw_data = self.data_redis.get(data_key)
             
             return raw_data if raw_data else None
-            
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            print(f"⚠️ Redis connection lost in pop: {e}")
+            self.ctrl_redis = None
+            self.data_redis = None
+            return None
         except Exception as e:
             print(f"DualRedisListBroker Pop Error: {e}")
             return None
@@ -193,7 +202,11 @@ class DualRedisListBroker(BrokerInterface):
             raw_data = self.data_redis.get(data_key)
             
             return raw_data if raw_data else None
-            
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            print(f"⚠️ Redis connection lost in pop_latest: {e}")
+            self.ctrl_redis = None
+            self.data_redis = None
+            return None
         except Exception as e:
             print(f"DualRedisListBroker PopLatest Error: {e}")
             return None

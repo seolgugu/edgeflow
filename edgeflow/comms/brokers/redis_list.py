@@ -60,8 +60,15 @@ class RedisListBroker(BrokerInterface):
             return
         self._ensure_connected()
         try:
-            # Use pipeline for atomic rpush+ltrim (reduces round-trips)
+            # Get limit from local cache, or fetch from Redis (for distributed env)
+            if topic not in self._topic_limits:
+                limit_bytes = self._redis.get(f"edgeflow:meta:limit:{topic}")
+                if limit_bytes:
+                    self._topic_limits[topic] = int(limit_bytes)
+            
             limit = self._topic_limits.get(topic, self.maxlen)
+            
+            # Use pipeline for atomic rpush+ltrim (reduces round-trips)
             pipe = self._redis.pipeline()
             pipe.rpush(topic, data)
             pipe.ltrim(topic, -limit, -1)
@@ -80,6 +87,10 @@ class RedisListBroker(BrokerInterface):
             result = self._redis.blpop([topic], timeout=timeout)
             if result:
                 return result[1]  # Return only the value
+            return None
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            print(f"⚠️ Redis connection lost in pop: {e}")
+            self._redis = None  # Force reconnect on next call
             return None
         except Exception as e:
             print(f"Redis Pop Error: {e}")
@@ -100,7 +111,10 @@ class RedisListBroker(BrokerInterface):
             if result:
                 return result[1]
             return None
-            
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            print(f"⚠️ Redis connection lost in pop_latest: {e}")
+            self._redis = None  # Force reconnect on next call
+            return None
         except Exception as e:
             print(f"Redis PopLatest Error: {e}")
             return None
