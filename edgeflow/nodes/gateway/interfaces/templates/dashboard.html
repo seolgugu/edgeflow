@@ -107,8 +107,8 @@
             text-align: center;
             background: rgba(22, 33, 62, 0.5);
             border-radius: 16px;
-            padding: 20px;
-            max-width: 900px;
+            padding: 30px;
+            max-width: 1200px;
             margin-left: auto;
             margin-right: auto;
         }
@@ -116,6 +116,7 @@
         .stats h2 {
             color: #00d4ff;
             margin-top: 0;
+            font-size: 1.5em;
         }
 
         .stats-grid {
@@ -127,23 +128,57 @@
 
         .stats-section {
             background: #0d1117;
-            padding: 15px;
-            border-radius: 8px;
+            padding: 20px;
+            border-radius: 12px;
+            min-height: 200px;
         }
 
         .stats-section h3 {
             color: #00d4ff;
             margin-top: 0;
-            font-size: 1em;
+            font-size: 1.1em;
+            margin-bottom: 15px;
         }
 
         .stats-section pre {
             margin: 0;
             text-align: left;
             font-family: 'Consolas', monospace;
-            font-size: 0.85em;
+            font-size: 0.9em;
             color: #7ee787;
             overflow-x: auto;
+            line-height: 1.5;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .stats {
+                padding: 20px 15px;
+                margin-top: 30px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .stats-section {
+                min-height: auto;
+                padding: 15px;
+            }
+
+            .card {
+                width: 100%;
+                max-width: 400px;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+
+            body {
+                padding: 15px;
+            }
         }
 
         .no-streams {

@@ -28,21 +28,29 @@ class Linker:
         if target.config.get('type') == 'gateway' or channel is not None:
             protocol = 'tcp'
 
-        self.source.config['targets'].append({
-            'name': target.name,
-            'protocol': protocol,
-            'channel': channel,
-            'qos': qos
-        })
+        # [중복 체크] 이미 같은 타겟이 등록되어 있으면 스킵
+        existing_targets = [t['name'] for t in self.source.config['targets']]
+        if target.name not in existing_targets:
+            self.source.config['targets'].append({
+                'name': target.name,
+                'protocol': protocol,
+                'channel': channel,
+                'qos': qos
+            })
+        else:
+            print(f"⚠️ Duplicate link ignored: {self.source.name} -> {target.name}")
         
         # 2. Input (Target <- Source)
         if 'sources' not in target.config:
             target.config['sources'] = []
-            
-        target.config['sources'].append({
-            'name': self.source.name,
-            'qos': qos
-        })
+        
+        # [중복 체크] 이미 같은 소스가 등록되어 있으면 스킵
+        existing_sources = [s['name'] for s in target.config['sources']]
+        if self.source.name not in existing_sources:
+            target.config['sources'].append({
+                'name': self.source.name,
+                'qos': qos
+            })
         
         return Linker(self.system, target)
 

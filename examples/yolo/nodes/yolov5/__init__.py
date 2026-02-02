@@ -54,13 +54,13 @@ class YoloV5(ConsumerNode):
             render_time = time.time() - t2
             
             # 4. Convert RGB -> BGR for OpenCV encoding
-            t3 = time.time()
-            processed_frame_bgr = cv2.cvtColor(processed_frame_rgb, cv2.COLOR_RGB2BGR)
+            # t3 = time.time()
+            # processed_frame_bgr = cv2.cvtColor(processed_frame_rgb, cv2.COLOR_RGB2BGR)
 
             # 5. Encode to JPEG (quality 80)
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
-            _, encoded_frame = cv2.imencode('.jpg', processed_frame_bgr, encode_param)
-            encode_time = time.time() - t3
+            _, encoded_frame = cv2.imencode('.jpg', processed_frame_rgb, encode_param)
+            encode_time = time.time() - t2
             
             total_time = time.time() - start_total
             print(f"[{worker_id}] decode:{decode_time*1000:.1f}ms infer:{inference_time*1000:.1f}ms render:{render_time*1000:.1f}ms encode:{encode_time*1000:.1f}ms TOTAL:{total_time*1000:.1f}ms", flush=True)

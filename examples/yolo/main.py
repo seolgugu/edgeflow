@@ -26,8 +26,8 @@ app.link(cam).to(yolo, qos=QoS.REALTIME).to(gw)
 app.link(fake_cam).to(fake_yolo, qos=QoS.REALTIME).to(gw)
 
 # YoloV5 -> Gateway (Result)
-app.link(yolo).to(gw)
-app.link(fake_yolo).to(gw)
+app.link(cam).to(gw)
+app.link(fake_cam).to(gw)
 
 # ============================================================
 # 실행 진입점
