@@ -297,6 +297,9 @@
         .modal-content img {
             width: 100%;
             height: auto;
+            min-width: 80vw;
+            min-height: 50vh;
+            object-fit: contain;
             border-radius: 12px;
         }
 
@@ -324,11 +327,12 @@
         .modal-overlay-info {
             position: absolute;
             top: 20px;
-            left: 20px;
+            right: 80px;
             background: rgba(0, 0, 0, 0.6);
             padding: 10px 16px;
             border-radius: 8px;
             backdrop-filter: blur(4px);
+            text-align: right;
         }
 
         .modal-overlay-info .topic-name {
