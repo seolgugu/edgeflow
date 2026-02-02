@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EdgeFlow Dashboard</title>
     <style>
         * {
@@ -38,13 +39,24 @@
             width: 400px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             border: 1px solid rgba(0, 212, 255, 0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
-            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+            cursor: grab;
         }
 
         .card:hover {
             transform: translateY(-5px);
             box-shadow: 0 12px 40px rgba(0, 212, 255, 0.2);
+        }
+
+        .card.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+            transform: scale(1.02);
+        }
+
+        .card.drag-over {
+            border: 2px dashed #00d4ff;
+            transform: translateY(-5px);
         }
 
         .card h3 {
@@ -460,7 +472,12 @@
 
             const card = document.createElement('div');
             card.className = 'card';
-            card.onclick = () => openModal(topic);
+            card.setAttribute('data-topic', topic);
+            card.setAttribute('draggable', 'true');
+            card.onclick = (e) => {
+                // Don't open modal if just finished dragging
+                if (!card.classList.contains('dragging')) openModal(topic);
+            };
             card.innerHTML = `
                 <div class="video-container">
                     <img src="/video/${topic}" alt="${topic}" />
@@ -470,7 +487,75 @@
                     </div>
                 </div>
             `;
-            grid.appendChild(card);
+
+            // Drag & Drop events
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragend', handleDragEnd);
+            card.addEventListener('dragover', handleDragOver);
+            card.addEventListener('dragenter', handleDragEnter);
+            card.addEventListener('dragleave', handleDragLeave);
+            card.addEventListener('drop', handleDrop);
+
+            // Insert in sorted order by topic name (initial order)
+            const cards = Array.from(grid.querySelectorAll('.card'));
+            const insertBefore = cards.find(c => c.getAttribute('data-topic') > topic);
+            if (insertBefore) {
+                grid.insertBefore(card, insertBefore);
+            } else {
+                grid.appendChild(card);
+            }
+        }
+
+        // Drag & Drop handlers
+        let draggedCard = null;
+
+        function handleDragStart(e) {
+            draggedCard = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', this.getAttribute('data-topic'));
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.card').forEach(c => c.classList.remove('drag-over'));
+            draggedCard = null;
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleDragEnter(e) {
+            e.preventDefault();
+            if (this !== draggedCard) {
+                this.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (this !== draggedCard && draggedCard) {
+                const grid = document.getElementById('video-grid');
+                const cards = Array.from(grid.querySelectorAll('.card'));
+                const draggedIdx = cards.indexOf(draggedCard);
+                const targetIdx = cards.indexOf(this);
+
+                if (draggedIdx < targetIdx) {
+                    this.parentNode.insertBefore(draggedCard, this.nextSibling);
+                } else {
+                    this.parentNode.insertBefore(draggedCard, this);
+                }
+            }
+
+            this.classList.remove('drag-over');
         }
 
         function openModal(topic) {
